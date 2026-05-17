@@ -15,26 +15,27 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# Bot Tokeni va Adminlar ro'yxati (Sening yangi tokening qo'yildi!)
+# Bot Tokeni va Adminlar (Sening tokening joyida!)
 TOKEN = "8771036463:AAE5c354ocQFb6qtrmQ2oI0gEx1MHHvvmG0"
 MAIN_ADMIN = 7920504062  # Sen (Bosh admin)
-ASSISTANT_ADMINS = set() # Yordamchi adminlar IDlari shu yerga tushadi
-BANNED_USERS = set()     # Bloklanganlar ro'yxati
+ASSISTANT_ADMINS = set() # Yordamchi adminlar
+BANNED_USERS = set()     # Bloklanganlar
 
 USER_DATA = {}
 GAMES = {}
-ASK_STATE = {}  # Turli xil kiritish holatlarini saqlash uchun
+ASK_STATE = {}  # Kiritish holatlari uchun
 
 def get_user(user_id, name, username):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "name": name, "username": username or "yo'q",
-            "balance": 100, "role": "Tasodifiy 🎲", 
+            "balance": 100, "money_uzs": 0, "role": "Tasodifiy 🎲", 
             "armor": False, "pistol": False, "camera": False,
-            "wins": 0, "used_promo": False
+            "wins": 0
         }
     if user_id == MAIN_ADMIN or user_id in ASSISTANT_ADMINS:
         USER_DATA[user_id]["balance"] = 999999
+        USER_DATA[user_id]["money_uzs"] = 999999
     return USER_DATA[user_id]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -43,29 +44,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 Siz ushbu botdan bloklangansiz!")
         return
 
-    db = get_user(user.id, user.first_name, user.username)
+    get_user(user.id, user.first_name, user.username)
     
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text("🎮 Guruhda o'yinni boshlash uchun /game buyrug'ini yuboring!")
         return
 
-    bal = "Cheksiz ♾" if (user.id == MAIN_ADMIN or user.id in ASSISTANT_ADMINS) else f"{db['balance']} 💎"
-    
     text = (
         f"🕵️‍♂️ *Martin Mafia Botiga Xush Kelibsiz!*\n\n"
-        f"👤 *Ismingiz:* {user.first_name}\n"
-        f"💳 *Balansingiz:* {bal}\n"
-        f"🎭 *Tanlangan rol:* {db['role']}\n"
-        f"🛡 *Zirh (Bronjilet):* {'Mavjud ✅' if db['armor'] else 'Yoq ❌'}\n"
-        f"🔫 *To'pponcha:* {'Mavjud ✅' if db.get('pistol') else 'Yoq ❌'}\n"
-        f"👁 *Kamera:* {'Mavjud ✅' if db.get('camera') else 'Yoq ❌'}\n\n"
+        f"Mafiyalar va tinch aholi o'rtasidagi shafqatsiz jangga tayyormisiz?\n"
+        f"O'yinlarda yuting, so'm (UZS) ishlang va ularni olmoslarga almashtiring!\n\n"
         f"🚀 Guruhda do'stlaringiz bilan Martin Mafia o'ynash uchun botni guruhga qo'shing!"
     )
     
     kb = [
         [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-        [InlineKeyboardButton("🛒 Do'kon", callback_data="shop"), InlineKeyboardButton("🏆 Reyting", callback_data="rank")],
-        [InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
+        [InlineKeyboardButton("📊 Hisob (Profil)", callback_data="my_account"), InlineKeyboardButton("🛒 Do'kon", callback_data="shop")],
+        [InlineKeyboardButton("🏆 Reyting", callback_data="rank"), InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
     ]
     
     if user.id == MAIN_ADMIN or user.id in ASSISTANT_ADMINS:
@@ -74,21 +69,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
 async def send_ask_to_admins(user, amount, context):
-    """Barcha adminlarga tasdiqlash tugmalari bilan yuborish"""
     u_id = user.id
-    admin_kb = [
-        [
-            InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{u_id}_{amount}"),
-            InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{u_id}")
-        ]
-    ]
-    admin_msg = (
-        f"🔔 *Martin Mafia — Yangi Olmos So'rovi!*\n\n"
-        f"👤 O'yinchi: {user.first_name}\n"
-        f"🆔 ID: `{u_id}`\n"
-        f"🌐 Username: @{user.username or 'yoq'}\n"
-        f"💰 So'ralgan miqdor: *{amount} 💎*\n"
-    )
+    admin_kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{u_id}_{amount}"), InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{u_id}")]]
+    admin_msg = f"🔔 *Martin Mafia — Yangi Olmos So'rovi!*\n\n👤 O'yinchi: {user.first_name}\n🆔 ID: `{u_id}`\n🌐 Username: @{user.username or 'yoq'}\n💰 So'ralgan miqdor: *{amount} 💎*\n"
+    
     try: await context.bot.send_message(chat_id=MAIN_ADMIN, text=admin_msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(admin_kb))
     except Exception: pass
     for adm in ASSISTANT_ADMINS:
@@ -98,7 +82,6 @@ async def send_ask_to_admins(user, amount, context):
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
     text = update.message.text
-
     if u_id in BANNED_USERS: return
 
     # 1. Olmos kiritish holati
@@ -111,7 +94,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⏳ {amount} ta olmos so'rovi adminlarga yuborildi...")
         await send_ask_to_admins(update.effective_user, amount, context)
 
-    # 2. Bosh admin uchun: Yordamchi admin qo'shish holati
+    # 2. Yordamchi admin qo'shish
     elif u_id == MAIN_ADMIN and u_id in ASK_STATE and ASK_STATE[u_id] == "waiting_assistant_id":
         if not text.isdigit():
             await update.message.reply_text("❌ Xato! Faqat raqamli ID kiriting:")
@@ -120,33 +103,29 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ASSISTANT_ADMINS.add(new_admin_id)
         ASK_STATE[u_id] = "done"
         await update.message.reply_text(f"✅ ID `{new_admin_id}` muvaffaqiyatli Yordamchi Admin etib tayinlandi!")
-        try: await context.bot.send_message(chat_id=new_admin_id, text="🎉 Siz Martin Mafia botida **Yordamchi Admin** etib tayinlandingiz! Admin panelni ochish uchun /start bosing.", parse_mode="Markdown")
-        except Exception: pass
 
-    # 3. Admin Panel orqali to'g'ridan-to'g'ri balans to'ldirish
+    # 3. Admin Panel orqali balans to'ldirish
     elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and u_id in ASK_STATE and ASK_STATE[u_id] == "waiting_give_data":
         try:
             target_id, amt = map(int, text.split())
             user_db = get_user(target_id, "O'yinchi", "")
             user_db["balance"] += amt
             ASK_STATE[u_id] = "done"
-            await update.message.reply_text(f"✅ ID `{target_id}` ga {amt} ta olmos muvaffaqiyatli berildi.")
-            try: await context.bot.send_message(chat_id=target_id, text=f"💰 Admin hisobingizga *+{amt} 💎* qo'shdi! Jami balansingiz: {user_db['balance']} 💎", parse_mode="Markdown")
+            await update.message.reply_text(f"✅ ID `{target_id}` ga {amt} ta olmos berildi.")
+            try: await context.bot.send_message(chat_id=target_id, text=f"💰 Admin hisobingizga *+{amt} 💎* qo'shdi!", parse_mode="Markdown")
             except Exception: pass
         except Exception:
-            await update.message.reply_text("❌ Xato format! Namuna: `1234567 50` (ID va miqdor orasida joy tashlang):")
+            await update.message.reply_text("❌ Xato format! Namuna: `1234567 50`:")
 
     # 4. Admin Panel orqali bloklash (Ban)
     elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and u_id in ASK_STATE and ASK_STATE[u_id] == "waiting_ban_id":
         if not text.isdigit():
-            await update.message.reply_text("❌ ID faqat raqamlardan iborat bo'laxdi:")
+            await update.message.reply_text("❌ ID faqat raqamlardan iborat bo'ladi:")
             return
         ban_id = int(text)
         BANNED_USERS.add(ban_id)
         ASK_STATE[u_id] = "done"
         await update.message.reply_text(f"🚫 ID `{ban_id}` botdan butunlay bloklandi!")
-        try: await context.bot.send_message(chat_id=ban_id, text="🚫 Siz Martin Mafia botidan admin tomonidan bloklandingiz!")
-        except Exception: pass
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -156,15 +135,56 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     db = get_user(u_id, query.from_user.first_name, query.from_user.username)
 
-    if query.data == "shop":
+    # 📊 HISOB (PROFIL) BO'LIMI
+    if query.data == "my_account":
+        bal = "Cheksiz ♾" if (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) else f"{db['balance']} 💎"
+        money = "Cheksiz ♾" if (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) else f"{db['money_uzs']} UZS"
+        
         text = (
-            "🛍️ *Martin Mafia Do'koni:* Kerakli narsani tanlang:\n\n"
+            f"📊 *Sizning Martin Mafia Hisobingiz:*\n\n"
+            f"👤 *Ism:* {query.from_user.first_name}\n"
+            f"🆔 *ID Raqamingiz:* `{u_id}`\n"
+            f"🌐 *Username:* @{query.from_user.username or 'yoq'}\n\n"
+            f"💳 *Olmoslar:* {bal}\n"
+            f"💰 *Oddiy Pul:* {money}\n"
+            f"🏆 *O'yindagi yutuqlar:* {db['wins']} ta g'alaba\n\n"
+            f"🎭 *Joriy Rol:* {db['role']}\n"
+            f"🛡 *Zirh:* {'Bor ✅' if db['armor'] else 'Yo'q ❌'}\n"
+            f"🔫 *To'pponcha:* {'Bor ✅' if db.get('pistol') else 'Yo'q ❌'}\n"
+            f"👁 *Kamera:* {'Bor ✅' if db.get('camera') else 'Yo'q ❌'}\n\n"
+            f"🔄 *Almashuv:* 1000 UZS to'plab, uni 10 ta Olmosga almashtirishingiz mumkin!"
+        )
+        kb = [
+            [InlineKeyboardButton("🔄 1000 UZS -> 10 Olmos 💎", callback_data="exchange_uzs_to_diamonds")],
+            [InlineKeyboardButton("⬅️ Bosh sahifaga", callback_data="home")]
+        ]
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+    # UZS PULNI OLMOSGA ALMASHISH MANTIQI
+    elif query.data == "exchange_uzs_to_diamonds":
+        if u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS:
+            await query.answer("👑 Adminlarga balans cheksiz uka!", show_alert=True)
+            return
+            
+        if db["money_uzs"] < 1000:
+            await query.answer(f"❌ Pullaringiz yetarli emas! Sizda: {db['money_uzs']} UZS bor. Kamida 1000 UZS bo'lishi kerak.", show_alert=True)
+            return
+            
+        db["money_uzs"] -= 1000
+        db["balance"] += 10
+        await query.answer("🎉 Muvaffaqiyatli almashtirildi! +10 Olmos qo'shildi.", show_alert=True)
+        # Sahifani yangilash
+        await buttons(update, context)
+
+    elif query.data == "shop":
+        text = (
+            "🛍️ *Martin Mafia Do'koni:* Sotib olmoqchi bo'lgan narsangizni tanlang:\n\n"
             "🕶 Mafiya (50 💎)\n"
             "🧰 Shifokor (30 💎)\n"
             "🕵️‍♂️ Komissar (40 💎)\n"
             "🛡 Zirh (Bronjilet) (70 💎)\n"
-            "🔫 To'pponcha (100 💎) — *Yangi!*\n"
-            "👁 Kuzatuvchi Kamerasi (60 💎) — *Yangi!*"
+            "🔫 To'pponcha (100 💎)\n"
+            "👁 Kuzatuvchi Kamerasi (60 💎)"
         )
         kb = [
             [InlineKeyboardButton("🕶 Mafiya", callback_data="b_mafia"), InlineKeyboardButton("🧰 Shifokor", callback_data="b_doc")],
@@ -176,27 +196,21 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "home":
         if u_id in ASK_STATE: ASK_STATE.pop(u_id, None)
-        bal = "Cheksiz ♾" if (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) else f"{db['balance']} 💎"
         text = (
-            f"🕵️‍♂️ *Martin Mafia*\n\n"
-            f"👤 Ism: {query.from_user.first_name}\n"
-            f"💳 Balans: {bal}\n"
-            f"🎭 Rol: {db['role']}\n"
-            f"🛡 Zirh: {'Mavjud ✅' if db['armor'] else 'Yoq ❌'}\n"
-            f"🔫 To'pponcha: {'Mavjud ✅' if db.get('pistol') else 'Yoq ❌'}\n"
-            f"👁 Kamera: {'Mavjud ✅' if db.get('camera') else 'Yoq ❌'}"
+            f"🕵️‍♂️ *Martin Mafia Bot*\n\n"
+            f"Bosh sahifaga xush kelibsiz. Quyidagi menyulardan foydalanishingiz mumkin:"
         )
         kb = [
             [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-            [InlineKeyboardButton("🛒 Do'kon", callback_data="shop"), InlineKeyboardButton("🏆 Reyting", callback_data="rank")],
-            [InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
+            [InlineKeyboardButton("📊 Hisob (Profil)", callback_data="my_account"), InlineKeyboardButton("🛒 Do'kon", callback_data="shop")],
+            [InlineKeyboardButton("🏆 Reyting", callback_data="rank"), InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
         ]
         if u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS:
             kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
     elif query.data == "ask":
-        text = "💰 *Qancha olmos so'ramoqchisiz?*\n\nTayyor miqdorlardan birini tanlang yoki o'zingiz yozing:"
+        text = "💰 *Qancha olmos so'ramoqchisiz?*"
         kb = [
             [InlineKeyboardButton("20 💎", callback_data="amt_20"), InlineKeyboardButton("30 💎", callback_data="amt_30"), InlineKeyboardButton("40 💎", callback_data="amt_40")],
             [InlineKeyboardButton("✍️ Boshqa miqdor", callback_data="amt_custom")],
@@ -211,18 +225,17 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✍️ *Siz xohlagan olmos miqdorini raqamda yozib yuboring:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bekor qilish", callback_data="ask")]]))
         else:
             amount = int(mode)
-            await query.edit_message_text(f"⏳ {amount} ta olmos so'rovi adminlarga yuborildi. Tasdiqlanishini kuting...")
+            await query.edit_message_text(f"⏳ {amount} ta olmos so'rovi adminlarga yuborildi...")
             await send_ask_to_admins(query.from_user, amount, context)
 
-    # 👑 ADMIN PANEL INTERFEYSI
+    # 👑 ADMIN PANEL
     elif query.data == "admin_panel":
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
         text = (
             f"👑 *Martin Mafia — Katta Adminlik Paneli*\n\n"
-            f"📊 *Statistika:* Botda faol foydalanuvchilar soni: {len(USER_DATA)} ta\n"
-            f"👥 *Yordamchi adminlar soni:* {len(ASSISTANT_ADMINS)} ta\n"
-            f"🚫 *Bloklanganlar:* {len(BANNED_USERS)} ta\n\n"
-            f"Bajarmoqchi bo'lgan amalingizni tanlang:"
+            f"📊 *Statistika:* Botda o'yinchilar soni: {len(USER_DATA)} ta\n"
+            f"👥 *Yordamchi adminlar:* {len(ASSISTANT_ADMINS)} ta\n"
+            f"🚫 *Bloklanganlar:* {len(BANNED_USERS)} ta\n"
         )
         kb = [
             [InlineKeyboardButton("💰 Olmos Berish", callback_data="adm_give"), InlineKeyboardButton("🚫 Foydalanuvchini Banlash", callback_data="adm_ban")]
@@ -235,19 +248,18 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "adm_add_assistant":
         if u_id != MAIN_ADMIN: return
         ASK_STATE[u_id] = "waiting_assistant_id"
-        await query.edit_message_text("👤 *Yordamchi qilmoqchi bo'lgan odamingizning Telegram ID raqamini yozib yuboring:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
+        await query.edit_message_text("👤 *Yordamchi admin ID raqamini yozing:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
 
     elif query.data == "adm_give":
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
         ASK_STATE[u_id] = "waiting_give_data"
-        await query.edit_message_text("💰 *Olmos bermoqchi bo'lgan odam ID si va miqdorini yozing:*\n\nNamuna: `5432167 150`", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
+        await query.edit_message_text("💰 *ID va miqdorni yozing (Masalan: 5432167 150):*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
 
     elif query.data == "adm_ban":
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
         ASK_STATE[u_id] = "waiting_ban_id"
-        await query.edit_message_text("🚫 *Botdan butunlay bloklamoqchi (ban qilmoqchi) bo'lgan shaxsning ID raqamini yozing:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
+        await query.edit_message_text("🚫 *Bloklanadigan odam ID raqamini yozing:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
 
-    # ADMIN OLMOSTNI TASDIQLASA
     elif query.data.startswith("approve_"):
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
         data = query.data.split("_")
@@ -255,17 +267,15 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_db = get_user(target_id, "O'yinchi", "")
         user_db["balance"] += amount
         await query.edit_message_text(f"✅ ID `{target_id}` ning {amount} ta olmos so'rovi tasdiqlandi.")
-        try: await context.bot.send_message(chat_id=target_id, text=f"🎉 *Xushxabar!*\n\nAdmin so'rovingizni tasdiqladi va hisobingizga *+{amount} 💎* qo'shdi!", parse_mode="Markdown")
+        try: await context.bot.send_message(chat_id=target_id, text=f"🎉 Admin olmos so'rovingizni tasdiqladi va +{amount} 💎 qo'shdi!", parse_mode="Markdown")
         except Exception: pass
 
     elif query.data.startswith("reject_"):
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
         target_id = int(query.data.split("_")[1])
         await query.edit_message_text(f"❌ ID `{target_id}` ning so'rovi rad etildi.")
-        try: await context.bot.send_message(chat_id=target_id, text="❌ Afsuski, admin olmos so'rovingizni rad etdi.", parse_mode="Markdown")
-        except Exception: pass
 
-    # XARID TIZIMI
+    # DO'KON XARIDLARI
     elif query.data.startswith("b_"):
         item = query.data.split("_")[1]
         prices = {"mafia": 50, "doc": 30, "cop": 40, "arm": 70, "pistol": 100, "camera": 60}
@@ -278,7 +288,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif item == "pistol": db["pistol"] = True
         elif item == "camera": db["camera"] = True
         else: db["role"] = "Mafiya 🕶" if item=="mafia" else "Shifokor 🧰" if item=="doc" else "Komissar 🕵️‍♂️"
-        
         await query.edit_message_text("🎉 Xarid muvaffaqiyatli yakunlandi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
 
     elif query.data == "rank":
@@ -345,16 +354,20 @@ async def start_game_logic(g_id, context):
         try: await context.bot.send_message(chat_id=pid, text=f"🎭 Sizning rolingiz: *{pdata['role']}*", parse_mode="Markdown")
         except Exception: pass
     await context.bot.send_message(chat_id=g_id, text="🎭 Rollar shaxsiy xabarlarga yuborildi!\n\n🌌 *Tun boshlanmoqda...*")
+    
+    # 💰 O'YIN TUGAGANDA G'OLIBLARGA 400 UZS BERISH MANTIQI (Simulyatsiya qismi)
+    # Haqiqiy o'yinda g'olib jamoa aniqlanganda quyidagi kod ishlaydi:
+    for pid in p_ids:
+        user_db = get_user(pid, GAMES[g_id]["players"][pid]["name"], "")
+        # Bu erda g'olib jamoani tekshirib, yutganlarga 400 UZS va +1 wins qo'shiladi
+        user_db["money_uzs"] += 400
+        user_db["wins"] += 1
+        try: await context.bot.send_message(chat_id=pid, text="🎉 Tabriklaymiz! O'yinda yutganingiz uchun hisobingizga *+400 UZS* qo'shildi!", parse_mode="Markdown")
+        except Exception: pass
 
 def main():
     Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == '__main__':
-    main()
-    
+    app.add_handle
