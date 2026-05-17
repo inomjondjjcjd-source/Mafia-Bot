@@ -379,7 +379,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if g_id not in GAMES or GAMES[g_id]["status"] != "day": return
         if not GAMES[g_id]["players"].get(u_id, {}).get("alive", False): return
         GAMES[g_id]["day_votes"][u_id] = target_id
-        await context.bot.send_message(chat_id=g_id, text=f"🗳 **{GAMES[g_id]['players'][u_id]['name']}** -> **{GAMES[g_id]['players'][target_id]['name']}**ga ovoz berdi!")
+        await context.bot.send_message(chat_id=g_id, text=f"🗳 **{GAMES[g_id]['players'][u_id]['name']}** -> **{GAMES[g_id]['players'][target_id]['name']}**ga ovoz berdi!"
 
 def main():
     application = Application.builder().token(TOKEN).build()
