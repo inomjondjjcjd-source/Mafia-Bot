@@ -5,12 +5,13 @@ import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# Log tizimi
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Sizning faol tokeningiz
+# 🔑 Token (Martin maf bot tokeni)
 TOKEN = "8798029139:AAHMun4oeWPbbH5uFPpadm2qqpx_k_OFj3c"
 
-# 👑 Admin ID
+# 👑 Admin sozlamalari
 ADMIN_ID = 7920504062
 ADMIN_GROUP_ID = 7920504062 
 
@@ -392,4 +393,4 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE, admin_reply_handler))
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.Chat(ADMIN_GROUP_ID), admin_reply_handler))
     
-    application.run_polling(drop_p
+    
