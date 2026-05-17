@@ -4,182 +4,252 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# Render uchun server
 server = Flask('')
 @server.route('/')
-def home(): return "Martin Mafia Bot Tirik!"
+def home(): return "Martin Casino Bot Tirik!"
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-TOKEN = "8771036463:AAE5c354ocQFb6qtrmQ2oI0gEx1MHHvvmG0"
+# 🔥 SENING YANGI MA'LUMOTLARING JOYLASHTIRILDI
+TOKEN = "8443418214:AAEwtTcxOw2kYScXq3beGJDagxou_H6iuAc"
 MAIN_ADMIN = 7920504062  
-ASSISTANT_ADMINS = set() 
-BANNED_USERS = set()     
 
-USER_DATA = {}
-GAMES = {}
-ASK_STATE = {}  
-ACTIVE_PROMOCODES = {}  
-ASSISTANT_GIFT_COUNT = {}
+USER_BALANCES = {} # O'yinchilar balansi shu yerda saqlanadi
 
-def get_user(user_id, name, username):
-    if user_id not in USER_DATA:
-        USER_DATA[user_id] = {
-            "name": name, "username": username or "yoq",
-            "balance": 100, "money_uzs": 0, "role": "Tasodifiy", 
-            "armor": False, "pistol": False, "camera": False, "wins": 0,
-            "used_promos": []  
-        }
-        if user_id in ASSISTANT_ADMINS:
-            USER_DATA[user_id]["balance"] = 129
-            USER_DATA[user_id]["money_uzs"] = 0
+def check_user(user_id, name):
+    if user_id not in USER_BALANCES:
+        USER_BALANCES[user_id] = {"name": name, "money": 5000} # Boshlanishiga 5000 so'm tekin beriladi
+    return USER_BALANCES[user_id]
 
-    if user_id == MAIN_ADMIN:
-        USER_DATA[user_id]["balance"] = 999999
-        USER_DATA[user_id]["money_uzs"] = 999999
-        
-    return USER_DATA[user_id]
-
+# /start buyrug'i
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id in BANNED_USERS: return
-    ASK_STATE.pop(user.id, None)
-    get_user(user.id, user.first_name, user.username)
+    check_user(user.id, user.first_name)
     
     if update.effective_chat.type in ["group", "supergroup"]:
-        await update.message.reply_text("Guruhda o'yinni boshlash uchun /game buyrug'ini yuboring!")
+        await update.message.reply_text("🎰 Kazino guruhda tayyor! O'yinlarni boshlash uchun /casino deb yozing!")
         return
 
-    text = "Martin Mafia Botiga Xush Kelibsiz!\n\nO'yinlarda yuting, so'm ishlang va do'kondan narsalar xarid qiling!"
-    kb = [
-        [InlineKeyboardButton("Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-        [InlineKeyboardButton("Hisob (Profil)", callback_data="my_account"), InlineKeyboardButton("Do'kon", callback_data="shop")],
-        [InlineKeyboardButton("Promokod kiritish", callback_data="enter_promo"), InlineKeyboardButton("Reyting", callback_data="rank")],
-        [InlineKeyboardButton("Olmos so'rash", callback_data="ask")]
-    ]
-    if user.id == MAIN_ADMIN or user.id in ASSISTANT_ADMINS:
-        kb.append([InlineKeyboardButton("Admin Panel", callback_data="admin_panel")])
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    text = (
+        f"🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
+        f"Bu yerda siz guruhda daxshatli o'yinlar o'ynab, virtual pullar yutishingiz mumkin!\n\n"
+        f"💰 Boshlang'ich kapitalingiz: *5,000 so'm*"
+    )
+    kb = [[InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")]]
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-# 🔥 AYNIAN SIZ XOHLAGAN MANTIQ: Guruhda forward qilingan xabarga Reply qilib /give yozganda olmos berish
-async def give_cmd_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_id = update.effective_user.id
-    if u_id in BANNED_USERS: return
-    if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
-
-    msg = update.message
-    target_user = None
-
-    # Guruhda biron bir xabarga Reply (javob) berilgan bo'lsa
-    if msg.reply_to_message:
-        # O'sha xabarni guruhga kim forward qilib (uzatib) tashlagan bo'lsa, o'sha odamni oladi!
-        target_user = msg.reply_to_message.from_user
-
-    if not target_user:
-        await msg.reply_text("❌ Olmos berish uchun guruhga forward qilingan (yoki oddiy yozilgan) xabarga Reply (javob) qilib yozing!")
+# Guruhda menyuni ko'rish
+async def casino_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type not in ["group", "supergroup"]:
+        await update.message.reply_text("❌ Bu buyruq faqat guruhlarda ishlaydi!")
         return
-
-    # 1. BOSH ADMIN UCHUN MANTIQ (/give miqdor)
-    if u_id == MAIN_ADMIN:
-        try:
-            amt = int(context.args[0]) if context.args else 10 # Miqdor yozilmasa avtomatik 10 ta
-            user_db = get_user(target_user.id, target_user.first_name, target_user.username)
-            user_db["balance"] += amt
-            await msg.reply_text(f"👑 *Bosh Admin mukofoti!*\n\n👤 {target_user.first_name} (ID: `{target_user.id}`) hisobiga *+{amt} 💎* olmos qo'shildi!\nHozirgi balansi: {user_db['balance']} ta.", parse_mode="Markdown")
-        except:
-            await msg.reply_text("❌ Miqdorni to'g'ri raqamda yozing! Namuna: `/give 10`", parse_mode="Markdown")
-
-    # 2. YORDAMCHI ADMIN UCHUN MANTIQ
-    elif u_id in ASSISTANT_ADMINS:
-        current_gifts = ASSISTANT_GIFT_COUNT.get(u_id, 0)
-        if current_gifts >= 6:
-            await msg.reply_text("❌ Siz 6 marta sovg'a berish limitidan to'liq foydalanib bo'ldingiz!")
-            return
-        
-        user_db = get_user(target_user.id, target_user.first_name, target_user.username)
-        user_db["balance"] += 5
-        ASSISTANT_GIFT_COUNT[u_id] = current_gifts + 1
-        
-        await msg.reply_text(
-            f"🎁 *Yordamchi Admin sovg'asi!*\n\n👤 {target_user.first_name} hisobiga sening hisobingdan *5 ta olmos* o'tkazildi!\n"
-            f"Sizda qolgan limit: *{6 - ASSISTANT_GIFT_COUNT[u_id]}/6* marta.", parse_mode="Markdown"
-        )
-
-async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    u_id = update.effective_user.id
-    text = update.message.text.strip()
     
-    if text.startswith('/start'):
-        ASK_STATE.pop(u_id, None)
-        await start(update, context)
+    text = (
+        "🎰 *KAZINO O'YINLARI RO'YXATI:*\n\n"
+        "🎲 `/dice MIQDOR` - Guruhdagilar bilan kubik o'ynash (Reply orqali)\n"
+        "🎯 `/dart MIQDOR` - Guruhdagilar bilan dart o'ynash (Reply orqali)\n"
+        "🎰 `/slot MIQDOR` - Slot avtomatini aylantirish (Botga qarshi)\n"
+        "💰 `/balans` - Pullaringizni tekshirish\n"
+        "🎁 `/bonus` - Har soatlik tekin pul olish\n"
+        "🏆 `/top` - Guruh boylari reytingi"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+# /balans buyrug'i
+async def balans(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    db = check_user(user.id, user.first_name)
+    await update.message.reply_text(f"👤 *{user.first_name}*, sizning balansingiz: *{db['money']:,} so'm* 💰", parse_mode="Markdown")
+
+# /bonus buyrug'i
+async def bonus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    db = check_user(user.id, user.first_name)
+    
+    omad_pul = random.randint(500, 3000)
+    db["money"] += omad_pul
+    await update.message.reply_text(f"🎁 *Kunlik Bonus!* \n\n👤 *{user.first_name}* sizga *+{omad_pul} so'm* berildi!\nHozirgi balans: *{db['money']:,} so'm*", parse_mode="Markdown")
+
+# 🎰 SLOT AVTOMATI O'YINI (Botga qarshi)
+async def slot_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    db = check_user(user.id, user.first_name)
+    
+    if not context.args:
+        await update.message.reply_text("❌ Tikish miqdorini yozing! Namuna: `/slot 1000`", parse_mode="Markdown")
+        return
+        
+    try:
+        bet = int(context.args[0])
+    except:
+        await update.message.reply_text("❌ Miqdorni faqat raqamda yozing!")
         return
 
-    if u_id in BANNED_USERS or u_id not in ASK_STATE: return
+    if bet <= 0:
+        await update.message.reply_text("❌ Minimal tikish 1 so'm!")
+        return
 
-    # Admin paneldagi shaxsiy mantiqlar (o'zgarishsiz)
-    if ASK_STATE[u_id] == "waiting_amount" and text.isdigit():
-        ASK_STATE.pop(u_id)
-        await update.message.reply_text(f"Olmos so'rovi yuborildi...")
+    if db["money"] < bet:
+        await update.message.reply_text(f"❌ Hisobingizda yetarli mablag' yo'q! Balans: {db['money']:,} so'm")
+        return
 
-    elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_assistant_id" and text.isdigit():
-        ASK_STATE.pop(u_id)
-        target_admin = int(text)
-        ASSISTANT_ADMINS.add(target_admin)
-        ASSISTANT_GIFT_COUNT[target_admin] = 0
-        await update.message.reply_text(f"ID {text} Yordamchi Admin bo'ldi!")
+    db["money"] -= bet
+    msg = await update.message.reply_dice(emoji="🎰")
+    value = msg.dice.value 
 
-    elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_give_data":
-        try:
-            tid, amt = map(int, text.split())
-            user_db = get_user(tid, "O'yinchi", "")
-            user_db["balance"] += amt
-            ASK_STATE.pop(u_id)
-            await update.message.reply_text(f"ID {tid} olmoslari o'zgardi! Jami: {user_db['balance']} ta.")
-        except: await update.message.reply_text("Xato format!")
+    winning_values = [1, 22, 43, 64]
+    await asyncio.sleep(2) 
 
-    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_ban_id" and text.isdigit():
-        ASK_STATE.pop(u_id)
-        BANNED_USERS.add(int(text))
-        await update.message.reply_text(f"ID {text} bloklandi!")
+    if value in winning_values:
+        win_amount = bet * 5
+        db["money"] += win_amount
+        await update.message.reply_text(f"🎉 *DAXSHAT YUTUQ!* 🎉\n\n👤 {user.first_name} tuman slotda yutdi va *+{win_amount:,} so'm* oldi!\nHozirgi balans: {db['money']:,} so'm", parse_mode="Markdown")
+    else:
+        await update.message.reply_text(f"📉 *Yutqazdingiz!* \n\n👤 {user.first_name}, slotda omadingiz kelmadi. *-{bet:,} so'm* ketdi.\nHozirgi balans: {db['money']:,} so'm", parse_mode="Markdown")
 
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    u_id = query.from_user.id
-    if u_id in BANNED_USERS: return
-    db = get_user(u_id, query.from_user.first_name, query.from_user.username)
+# 🎲 KUBIK O'YINI (Guruhda Reply orqali do'stiga qarshi)
+async def dice_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    msg = update.message
+    db = check_user(user.id, user.first_name)
 
-    if query.data == "my_account":
-        has_armor = "Bor" if db['armor'] else "Yoq"
-        text = f"Hisobingiz:\n\nIsm: {query.from_user.first_name}\nID: {u_id}\nOlmos: {db['balance']}\nPul: {db['money_uzs']} UZS\nZirh: {has_armor}"
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Orqaga", callback_data="home")]]))
-    elif query.data == "home":
-        ASK_STATE.pop(u_id, None)
-        await query.edit_message_text("Martin Mafia Bot menyusi:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],[InlineKeyboardButton("Hisob", callback_data="my_account")],[InlineKeyboardButton("Admin Panel", callback_data="admin_panel")] if u_id==MAIN_ADMIN or u_id in ASSISTANT_ADMINS else [InlineKeyboardButton("Reyting", callback_data="rank")]]))
-    elif query.data == "admin_panel":
-        if u_id == MAIN_ADMIN:
-            text = "Bosh Admin Panel"; kb = [[InlineKeyboardButton("Olmos +/-", callback_data="adm_give")],[InlineKeyboardButton("Banlash", callback_data="adm_ban")],[InlineKeyboardButton("Yordamchi Admin+", callback_data="adm_add")],[InlineKeyboardButton("Orqaga", callback_data="home")]]
-        elif u_id in ASSISTANT_ADMINS:
-            text = "Yordamchi Admin"; kb = [[InlineKeyboardButton("Banlash", callback_data="adm_ban")],[InlineKeyboardButton("Orqaga", callback_data="home")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
-    elif query.data == "adm_add" and u_id == MAIN_ADMIN: ASK_STATE[u_id] = "waiting_assistant_id"; await query.edit_message_text("ID kiriting:")
-    elif query.data == "adm_give" and u_id == MAIN_ADMIN: ASK_STATE[u_id] = "waiting_give_data"; await query.edit_message_text("ID va miqdor kiriting:")
-    elif query.data == "adm_ban": ASK_STATE[u_id] = "waiting_ban_id"; await query.edit_message_text("Ban ID kiriting:")
+    if not msg.reply_to_message:
+        await msg.reply_text("❌ Do'stingiz bilan o'ynash uchun uning xabariga *Reply (Javob)* qilib `/dice MIQDOR` deb yozing!", parse_mode="Markdown")
+        return
 
-async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    g_id = update.effective_chat.id
-    GAMES[g_id] = {"status": "join", "players": {}}
-    await update.message.reply_text("Martin Mafia boshlandi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("O'yinga qo'shilish", callback_data=f"j_{g_id}")]]))
+    target_user = msg.reply_to_message.from_user
+    if target_user.id == user.id:
+        await msg.reply_text("❌ O'zingiz bilan o'ynay olmaysiz!")
+        return
+
+    target_db = check_user(target_user.id, target_user.first_name)
+
+    if not context.args:
+        await msg.reply_text("❌ Tikish miqdorini yozing! Namuna: `/dice 2000`", parse_mode="Markdown")
+        return
+
+    try:
+        bet = int(context.args[0])
+    except:
+        await msg.reply_text("❌ Miqdorni faqat raqamda yozing!")
+        return
+
+    if db["money"] < bet:
+        await msg.reply_text(f"❌ Senda yetarli pul yo'q! Balans: {db['money']:,} so'm")
+        return
+    if target_db["money"] < bet:
+        await msg.reply_text(f"❌ {target_user.first_name}da yetarli pul yo'q! Uning balansi: {target_db['money']:,} so'm")
+        return
+
+    db["money"] -= bet
+    target_db["money"] -= bet
+
+    await msg.reply_text(f"🎲 *Kubik o'yini boshlandi!* Tikilgan pul: *{bet*2:,} so'm*\n\n1. {user.first_name} kubik tashlamoqda...", parse_mode="Markdown")
+    m1 = await msg.reply_dice(emoji="🎲")
+    v1 = m1.dice.value
+
+    await asyncio.sleep(2)
+
+    await msg.reply_text(f"2. {target_user.first_name} kubik tashlamoqda...", parse_mode="Markdown")
+    m2 = await msg.reply_dice(emoji="🎲")
+    v2 = m2.dice.value
+
+    await asyncio.sleep(2)
+
+    if v1 > v2:
+        db["money"] += (bet * 2)
+        text = f"🏆 *{user.first_name} YUTDI!* ({v1} vs {v2})\n\nHamma pulni oldi! Jami balans: {db['money']:,} so'm"
+    elif v2 > v1:
+        target_db["money"] += (bet * 2)
+        text = f"🏆 *{target_user.first_name} YUTDI!* ({v2} vs {v1})\n\nHamma pulni oldi! Jami balans: {target_db['money']:,} so'm"
+    else:
+        db["money"] += bet
+        target_db["money"] += bet
+        text = f"🤝 *Durang!* ({v1} vs {v2})\n\nPullar egalariga qaytarildi."
+
+    await msg.reply_text(text, parse_mode="Markdown")
+
+# 🎯 DART O'YINI (Guruhda Reply orqali do'stiga qarshi)
+async def dart_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    msg = update.message
+    db = check_user(user.id, user.first_name)
+
+    if not msg.reply_to_message:
+        await msg.reply_text("❌ Do'stingiz bilan dart o'ynash uchun uning xabariga *Reply (Javob)* qilib `/dart MIQDOR` deb yozing!", parse_mode="Markdown")
+        return
+
+    target_user = msg.reply_to_message.from_user
+    if target_user.id == user.id: return
+
+    target_db = check_user(target_user.id, target_user.first_name)
+
+    if not context.args:
+        await msg.reply_text("❌ Tikish miqdorini yozing! Namuna: `/dart 3000`", parse_mode="Markdown")
+        return
+
+    try: bet = int(context.args[0])
+    except: return
+
+    if db["money"] < bet or target_db["money"] < bet:
+        await msg.reply_text("❌ Kimdadir pul yetarli emas!")
+        return
+
+    db["money"] -= bet
+    target_db["money"] -= bet
+
+    await msg.reply_text(f"🎯 *Dart jangi boshlandi!* Garov: *{bet*2:,} so'm*\n\n1. {user.first_name} nishonga otmoqda...", parse_mode="Markdown")
+    m1 = await msg.reply_dice(emoji="🎯")
+    v1 = m1.dice.value
+    await asyncio.sleep(2)
+
+    await msg.reply_text(f"2. {target_user.first_name} nishonga otmoqda...", parse_mode="Markdown")
+    m2 = await msg.reply_dice(emoji="🎯")
+    v2 = m2.dice.value
+    await asyncio.sleep(2)
+
+    if v1 > v2:
+        db["money"] += (bet * 2)
+        text = f"🏆 *{user.first_name} aniqroq urdi va YUTDI!* \n\nJami balans: {db['money']:,} so'm"
+    elif v2 > v1:
+        target_db["money"] += (bet * 2)
+        text = f"🏆 *{target_user.first_name} aniqroq urdi va YUTDI!* \n\nJami balans: {target_db['money']:,} so'm"
+    else:
+        db["money"] += bet
+        target_db["money"] += bet
+        text = "🤝 *Durang!* Ikkalangiz ham bir xil urdingiz."
+
+    await msg.reply_text(text, parse_mode="Markdown")
+
+# 🏆 TOP REYTING
+async def top_rich(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not USER_BALANCES:
+        await update.message.reply_text("🏆 Hozircha hech kim ro'yxatda yo'q.")
+        return
+    sorted_users = sorted(USER_BALANCES.items(), key=lambda x: x[1]["money"], reverse=True)[:10]
+    
+    text = "🏆 *GURUHNING ENG BOY KAZINOCHILARI:* \n\n"
+    for i, (uid, data) in enumerate(sorted_users, 1):
+        text += f"{i}. 👤 {data['name']} — *{data['money']:,} so'm*\n"
+        
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 def main():
     Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handler(CommandHandler("give", give_cmd_handler)) 
-    app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.add_handler(CommandHandler("casino", casino_menu))
+    app.add_handler(CommandHandler("balans", balans))
+    app.add_handler(CommandHandler("bonus", bonus))
+    app.add_handler(CommandHandler("slot", slot_game))
+    app.add_handler(CommandHandler("dice", dice_game))
+    app.add_handler(CommandHandler("dart", dart_game))
+    app.add_handler(CommandHandler("top", top_rich))
+    
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__': main()
