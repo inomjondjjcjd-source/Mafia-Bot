@@ -393,4 +393,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE, admin_reply_handler))
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.Chat(ADMIN_GROUP_ID), admin_reply_handler))
     
-    application.run_polli
+        application.run_polling(drop_pending_updates=True)
+
+if __name__ == '__main__':
+    main()
