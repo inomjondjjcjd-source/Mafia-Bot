@@ -28,9 +28,9 @@ def keep_alive():
 # Bot Tokeni
 TOKEN = "8771036463:AAFtaCJUKZmB7B0fazFKkZ_slVN7eHtHn2A"
 
-# Admin sozlamalari (Guruh ID - belgisi bilan bo'lishi shart!)
+# Admin sozlamalari
 ADMIN_ID = 7920504062
-ADMIN_GROUP_ID = -1002447990504  # Guruhingiz ID raqamini shu yerga to'g'rilab yozasiz (minus belgisi bilan)
+ADMIN_GROUP_ID = -1002447990504  # Guruh ID raqami
 
 USER_DATA = {}
 GAMES = {}
@@ -180,7 +180,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"🔔 *Olmos So'rovi!*\n\n👤 O'yinchi: {query.from_user.first_name}\n🆔 ID: `{u_id}`\n🌐 Username: @{query.from_user.username or 'yoq'}\n\nUshbu foydalanuvchi tekin olmos so'ramoqda!", parse_mode="Markdown")
             await query.edit_message_text("✅ So'rovingiz guruh adminlariga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]]))
-        except Exception as e:
+        except Exception:
             await query.edit_message_text("⚠️ Xatolik yuz berdi. Admin guruh sozlamalari noto'g'ri.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]]))
 
     elif query.data.startswith("join_"):
@@ -364,7 +364,7 @@ async def resolve_day_vote(g_id, context):
         else:
             lynched = winners[0]
             GAMES[g_id]["players"][lynched]["alive"] = False
-            await context.bot.send_message(chat_id=g_id, text=f"⚖️ Xalq qaroriga ko'ra gumonlanuvchi: *{GAMES[g_id]['players'][lynched]['name']}* qatl qilindi! (Roli: {GAMES[g_id]['players'][lynched]['role']})", parse_mode="Markdown")
+            await context.bot.send_message(chat_id=g_id, text=f"⚖️ Xalq qaroriga ko'ra gumonlanuvchi: *{GAMES[g_id]['players'][lynched]['name']}* qatl edildi! (Roli: {GAMES[g_id]['players'][lynched]['role']})", parse_mode="Markdown")
 
     if await check_game_end(g_id, context):
         return
@@ -377,7 +377,7 @@ async def check_game_end(g_id, context):
     good_alive = sum(1 for p in GAMES[g_id]["players"].values() if p["alive"] and "Mafiya" not in p["role"])
     
     if mafia_alive == 0:
-        await context.bot.send_message(chat_id=g_id, text="🎉 *Tinch aholi vakillari g'alaba qozonishdi!* Barcha mafiyalar yo'q qilindi.", parse_mode="Markdown")
+        await context.bot.send_message(chat_id=g_id, text="🎉 *Tinch aholi vakillari g'alaba qozonishden!* Barcha mafiyalar yo'q qilindi.", parse_mode="Markdown")
         for p in GAMES[g_id]["players"].values():
             if "Mafiya" not in p["role"]:
                 get_or_create_user(p["id"], "", "")["wins"] += 1
@@ -399,4 +399,6 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("🛑 O'yinni faqat bosh admin majburiy to'xtata oladi!")
         return
-    if g_id in GAMES and GAMES[g_id]["status"] !
+    if g_id in GAMES and GAMES[g_id]["status"] != "ended":
+        GAMES[g_id]["status"] = "ended"
+        await update.message.reply_text("🛑 O'yin admin
