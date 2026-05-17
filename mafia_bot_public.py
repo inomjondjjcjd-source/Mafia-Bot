@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 # Log tizimi
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Token (Martin maf bot tokeni)
+# 🔑 Bot Tokeni
 TOKEN = "8798029139:AAHMun4oeWPbbH5uFPpadm2qqpx_k_OFj3c"
 
 # 👑 Admin sozlamalari
@@ -393,4 +393,4 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE, admin_reply_handler))
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY & filters.Chat(ADMIN_GROUP_ID), admin_reply_handler))
     
-    
+    application.run_polli
