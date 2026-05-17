@@ -2,6 +2,9 @@ import os
 import logging
 import random
 import asyncio
+from http.server import SimpleHTTPRequestHandler
+import socketserver
+import threading
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
@@ -17,6 +20,14 @@ ADMIN_GROUP_ID = -7920504062
 
 USER_DATA = {}
 GAMES = {}
+
+# RENDER PORT MUAMMOSINI YECHISH UCHUN MITTI SERVER
+def run_dummy_server():
+    PORT = int(os.environ.get("PORT", 8080))
+    Handler = SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        logging.info(f"Render uchun port ochildi: {PORT}")
+        httpd.serve_forever()
 
 def get_or_create_user(user_id, username, first_name):
     if user_id not in USER_DATA:
@@ -269,7 +280,7 @@ async def run_night(g_id, context):
     GAMES[g_id]["doc_vote"] = None
     GAMES[g_id]["cop_vote"] = None
     
-    await context.bot.send_message(chat_id=g_id, text=text="Tun keldi. Shahar uyquga ketdi. O'yin faollari shaxsiy chatga o'ting...")
+    await context.bot.send_message(chat_id=g_id, text="Tun keldi. Shahar uyquga ketdi. O'yin faollari shaxsiy chatga o'ting...")
     
     for p_id, p_data in GAMES[g_id]["players"].items():
         if not p_data["alive"]:
@@ -395,6 +406,10 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Format: /give ID Olmos_Soni")
 
 def main():
+    # Render portini aldash uchun serverni alohida oqimda ishga tushiramiz
+    t = threading.Thread(target=run_dummy_server, daemon=True)
+    t.start()
+
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
