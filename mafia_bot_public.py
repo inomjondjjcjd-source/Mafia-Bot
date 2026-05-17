@@ -370,4 +370,9 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handle
+    app.add_handler(CallbackQueryHandler(buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == '__main__':
+    main()
