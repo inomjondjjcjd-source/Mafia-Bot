@@ -22,6 +22,9 @@ GAMES = {}
 ASK_STATE = {}  
 ACTIVE_PROMOCODES = {}  
 
+# Yordamchi adminlarning sovg'a berish limitini kuzatish: {admin_id: ishlatilgan_soni}
+ASSISTANT_GIFT_COUNT = {}
+
 def get_user(user_id, name, username):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
@@ -30,12 +33,10 @@ def get_user(user_id, name, username):
             "armor": False, "pistol": False, "camera": False, "wins": 0,
             "used_promos": []  
         }
-        # Yordamchi admin qo'shilganda olmosi srazu 129 ta bo'ladi, puli esa cheksiz emas!
         if user_id in ASSISTANT_ADMINS:
             USER_DATA[user_id]["balance"] = 129
             USER_DATA[user_id]["money_uzs"] = 0
 
-    # Faqat Bosh Admin hisobi cheksiz bo'lib qoladi
     if user_id == MAIN_ADMIN:
         USER_DATA[user_id]["balance"] = 999999
         USER_DATA[user_id]["money_uzs"] = 999999
@@ -45,13 +46,15 @@ def get_user(user_id, name, username):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id in BANNED_USERS: return
+    
+    ASK_STATE.pop(user.id, None)
     get_user(user.id, user.first_name, user.username)
     
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text("🎮 Guruhda o'yinni boshlash uchun /game buyrug'ini yuboring!")
         return
 
-    text = "🕵️‍♂️ *Martin Mafia Botiga Xush Kelibsiz!*\n\nO'yinlarda yuting, so'm ishlang, promokodlarni kiriting va ularni olmoslarga almashtiring!"
+    text = "🕵️‍♂️ *Martin Mafia Botiga Xush Kelibsiz!*\n\nO'yinlarda yuting, so'm ishlang va do'kondan narsalar xarid qiling!"
     kb = [
         [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("📊 Hisob (Profil)", callback_data="my_account"), InlineKeyboardButton("🛒 Do'kon", callback_data="shop")],
@@ -73,6 +76,12 @@ async def send_ask_to_admins(user, amount, context):
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
     text = update.message.text.strip()
+    
+    if text.startswith('/start'):
+        ASK_STATE.pop(u_id, None)
+        await start(update, context)
+        return
+
     if u_id in BANNED_USERS or u_id not in ASK_STATE: return
 
     # 1. Olmos so'rash
@@ -81,50 +90,74 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⏳ {text} ta olmos so'rovi yuborildi...")
         await send_ask_to_admins(update.effective_user, int(text), context)
 
-    # 2. Yordamchi admin qo'shish
+    # 2. Faqat Bosh admin uchun: Yordamchi admin qo'shish
     elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_assistant_id" and text.isdigit():
         ASK_STATE.pop(u_id)
         target_admin = int(text)
         ASSISTANT_ADMINS.add(target_admin)
-        # Srazu bazada bo'lsa olmosini 129 qilib qo'yamiz
+        ASSISTANT_GIFT_COUNT[target_admin] = 0 # Sovg'a limiti hisoblagichini ochish
         if target_admin in USER_DATA:
             USER_DATA[target_admin]["balance"] = 129
             USER_DATA[target_admin]["money_uzs"] = 0
-        await update.message.reply_text(f"✅ ID {text} Yordamchi Admin bo'ldi! Balansi: 129 olmos qilib belgilandi.")
+        await update.message.reply_text(f"✅ ID {text} Yordamchi Admin bo'ldi! Balansi: 129 olmos.")
 
-    # 3. Admin: Olmos berish/olish mantiqi
-    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_give_data":
+    # 3. Bosh Admin: Istalgancha olmos berish/olish
+    elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_give_data":
         try:
             tid, amt = map(int, text.split())
             user_db = get_user(tid, "O'yinchi", "")
             user_db["balance"] += amt
             ASK_STATE.pop(u_id)
             status_text = f"ko'paytirildi (+{amt})" if amt >= 0 else f"kamaytirildi ({amt})"
-            await update.message.reply_text(f"✅ ID `{tid}` ning olmoslari {status_text}! Hozirgi olmosi: {user_db['balance']} ta.")
+            await update.message.reply_text(f"✅ Bosh Admin! ID `{tid}` olmoslari {status_text}! Hozir: {user_db['balance']} ta.")
         except:
-            await update.message.reply_text("❌ Xato format! Namuna: `12345 50` (qo'shish) yoki `12345 -20` (kamaytirish)")
+            await update.message.reply_text("❌ Xato format! Namuna: `12345 50` yoki `12345 -20`")
 
-    # 🔥 NEW: Admin: Pul (UZS) ko'paytirish yoki kamaytirish mantiqi
-    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_give_money_data":
+    # 🔥 Yordamchi Admin: Faqat 5 almaz sovg'a bera olish mantiqi (Maksimum 6 marta sening hisobingdan)
+    elif u_id in ASSISTANT_ADMINS and ASK_STATE[u_id] == "waiting_assistant_gift":
+        if not text.isdigit():
+            await update.message.reply_text("❌ Iltimos faqat foydalanuvchi ID raqamini yozing!")
+            return
+        
+        target_id = int(text)
+        current_gifts = ASSISTANT_GIFT_COUNT.get(u_id, 0)
+        
+        if current_gifts >= 6:
+            ASK_STATE.pop(u_id)
+            await update.message.reply_text("❌ Kechirasiz, siz 6 marta sovg'a berish limitidan to'liq foydalanib bo'ldingiz!")
+            return
+            
+        user_db = get_user(target_id, "O'yinchi", "")
+        user_db["balance"] += 5 # Faqat 5 almaz qo'shiladi
+        ASSISTANT_GIFT_COUNT[u_id] = current_gifts + 1
+        ASK_STATE.pop(u_id)
+        
+        await update.message.reply_text(
+            f"🎁 *Yordamchi Admin sovg'asi!*\n\nID `{target_id}` hisobiga sening hisobingdan *5 ta olmos* o'tkazildi!\n"
+            f"Sizda qolgan limit: *{6 - ASSISTANT_GIFT_COUNT[u_id]}/6* marta.", parse_mode="Markdown"
+        )
+
+    # 4. Bosh Admin: Pul (UZS) ko'paytirish/kamaytirish
+    elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_give_money_data":
         try:
             tid, amt = map(int, text.split())
             user_db = get_user(tid, "O'yinchi", "")
             user_db["money_uzs"] += amt
-            if user_db["money_uzs"] < 0: user_db["money_uzs"] = 0 # Minusga kirib ketmasligi uchun
+            if user_db["money_uzs"] < 0: user_db["money_uzs"] = 0 
             ASK_STATE.pop(u_id)
             status_text = f"ko'paytirildi (+{amt} UZS)" if amt >= 0 else f"kamaytirildi ({amt} UZS)"
-            await update.message.reply_text(f"✅ ID `{tid}` ning pullari {status_text}! Hozirgi balansi: {user_db['money_uzs']} UZS.")
+            await update.message.reply_text(f"✅ ID `{tid}` pullari {status_text}! Hozir: {user_db['money_uzs']} UZS.")
         except:
-            await update.message.reply_text("❌ Xato format! Namuna: `12345 5000` (pul qo'shish) yoki `12345 -3000` (pul kamaytirish)")
+            await update.message.reply_text("❌ Xato format! Namuna: `12345 5000`")
 
-    # 4. Foydalanuvchini banlash
-    elif ASK_STATE[u_id] == "waiting_ban_id" and text.isdigit():
+    # 5. Adminlar (Bosh va yordamchi): Banlash
+    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_ban_id" and text.isdigit():
         ASK_STATE.pop(u_id)
         BANNED_USERS.add(int(text))
-        await update.message.reply_text("🚫 Bloklandi!")
+        await update.message.reply_text(f"🚫 ID {text} muvaffaqiyatli bloklandi!")
 
-    # 5. Admin Panel: Promokod yaratish
-    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_promo_create":
+    # 6. Faqat Bosh Admin: Promokod yaratish
+    elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_promo_create":
         try:
             p_code, p_val = text.split()
             p_code = p_code.upper()
@@ -133,9 +166,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ASK_STATE.pop(u_id)
             await update.message.reply_text(f"✅ *Promokod Yaratildi!*\n\n🎟 Kod: `{p_code}`\n💎 Olmos: *{p_val} ta*", parse_mode="Markdown")
         except:
-            await update.message.reply_text("❌ Xato format!\nNamuna: `OMADLI 50`")
+            await update.message.reply_text("❌ Xato format! Namuna: `OMADLI 50`")
 
-    # 6. Foydalanuvchi promokod kiritganda
+    # 7. Foydalanuvchi promokod kiritganda
     elif ASK_STATE[u_id] == "waiting_promo_enter":
         u_promo = text.upper()
         db = get_user(u_id, update.effective_user.first_name, update.effective_user.username)
@@ -207,25 +240,45 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")] if u_id==MAIN_ADMIN or u_id in ASSISTANT_ADMINS else [InlineKeyboardButton("🏆 Reyting", callback_data="rank")]
         ]))
 
-    # KATTA ADMIN PANEL INTERFEYSI
+    # 🔥 SAVDO VA HUQUQLAR AJRATILGAN ADMIN PANEL INTERFEYSI
     elif query.data == "admin_panel":
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
-        text = f"👑 *Admin Panel*\n\nO'yinchilar: {len(USER_DATA)} ta\nFaol promokodlar: {len(ACTIVE_PROMOCODES)} ta"
-        kb = [
-            [InlineKeyboardButton("💎 Olmos +/-", callback_data="adm_give"), InlineKeyboardButton("💰 Pul +/-", callback_data="adm_give_money")],
-            [InlineKeyboardButton("🎟 Promokod Yaratish", callback_data="adm_create_promo"), InlineKeyboardButton("🚫 Banlash", callback_data="adm_ban")]
-        ]
-        if u_id == MAIN_ADMIN: kb.append([InlineKeyboardButton("➕ Yordamchi Admin", callback_data="adm_add")])
-        kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="home")])
+        
+        if u_id == MAIN_ADMIN:
+            # Bosh admin hamma narsani ko'radi
+            text = f"👑 *Bosh Admin Panel*\n\nO'yinchilar: {len(USER_DATA)} ta\nFaol promokodlar: {len(ACTIVE_PROMOCODES)} ta"
+            kb = [
+                [InlineKeyboardButton("💎 Olmos +/- (Istalgancha)", callback_data="adm_give"), InlineKeyboardButton("💰 Pul +/-", callback_data="adm_give_money")],
+                [InlineKeyboardButton("🎟 Promokod Yaratish", callback_data="adm_create_promo"), InlineKeyboardButton("🚫 Banlash", callback_data="adm_ban")],
+                [InlineKeyboardButton("➕ Yordamchi Admin", callback_data="adm_add")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]
+            ]
+        else:
+            # Yordamchi admin faqat Banlash va sening hisobingdan 5 ta almaz sovg'a berishni ko'radi
+            used = ASSISTANT_GIFT_COUNT.get(u_id, 0)
+            text = f"🎖 *Yordamchi Admin Paneli*\n\n🎁 Berilgan sovg'alar: {used}/6 marta."
+            kb = [
+                [InlineKeyboardButton("🎁 5 Olmos Sovg'a Berish", callback_data="asst_gift"), InlineKeyboardButton("🚫 Banlash", callback_data="adm_ban")],
+                [InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]
+            ]
+            
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-    elif query.data == "adm_add": ASK_STATE[u_id] = "waiting_assistant_id"; await query.edit_message_text("Yordamchi admin bo'ladigan shaxsning ID raqamini yuboring:")
-    elif query.data == "adm_give": ASK_STATE[u_id] = "waiting_give_data"; await query.edit_message_text("Olmosini o'zgartirmoqchi bo'lgan ID va miqdorni yozing.\n\nKo'paytirish uchun: `12345 50`\nKamaytirish uchun: `12345 -30`")
-    elif query.data == "adm_give_money": ASK_STATE[u_id] = "waiting_give_money_data"; await query.edit_message_text("Pulini o'zgartirmoqchi bo'lgan ID va UZS miqdorini yozing.\n\nKo'paytirish uchun: `12345 5000`\nKamaytirish uchun: `12345 -2000`")
+    # Yordamchi admin sovg'a berish tugmasi
+    elif query.data == "asst_gift":
+        if u_id not in ASSISTANT_ADMINS: return
+        if ASSISTANT_GIFT_COUNT.get(u_id, 0) >= 6:
+            await query.answer("❌ Sovg'a berish limites tugagan!", show_alert=True)
+            return
+        ASK_STATE[u_id] = "waiting_assistant_gift"
+        await query.edit_message_text("🎁 *Sovg'a yuboriladigan foydalanuvchi ID raqamini kiriting:*\n(Sizning hisobingizdan avtomatik 5 olmos yechiladi)", parse_mode="Markdown")
+
+    elif query.data == "adm_add" and u_id == MAIN_ADMIN: ASK_STATE[u_id] = "waiting_assistant_id"; await query.edit_message_text("Yordamchi admin bo'ladigan shaxsning ID raqamini yuboring:")
+    elif query.data == "adm_give" and u_id == MAIN_ADMIN: ASK_STATE[u_id] = "waiting_give_data"; await query.edit_message_text("ID va miqdorni yozing (Masalan: `12345 50`):")
+    elif query.data == "adm_give_money" and u_id == MAIN_ADMIN: ASK_STATE[u_id] = "waiting_give_money_data"; await query.edit_message_text("ID va UZS miqdorini yozing (Masalan: `12345 5000`):")
     elif query.data == "adm_ban": ASK_STATE[u_id] = "waiting_ban_id"; await query.edit_message_text("Ban qilmoqchi bo'lgan odam ID raqamini yuboring:")
 
-    elif query.data == "adm_create_promo":
-        if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
+    elif query.data == "adm_create_promo" and u_id == MAIN_ADMIN:
         ASK_STATE[u_id] = "waiting_promo_create"
         await query.edit_message_text("🎟 *Promokod nomi va beradigan olmos miqdorini yozing:*\n\nNamuna: `OMADLI 50`", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
 
@@ -295,4 +348,4 @@ def main():
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__': main()
-        
+            
