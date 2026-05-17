@@ -8,7 +8,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 TOKEN = os.environ.get("API_TOKEN", "8798029139:AAFqEcEt-q6BhXr3an0jZMjZjYsBY_C7Z0w")
 
-# 🔴 Sizning Telegram ID raqamingiz muvaffaqiyatli ulandi!
+# 🔴 Sizning Telegram ID raqamingiz daxlsiz admin qilib ulandi!
 ADMIN_ID = 7920504062
 
 # Foydalanuvchilar ma'lumotlari bazasi
@@ -19,7 +19,7 @@ def get_or_create_user(user_id, username, first_name):
         USER_DATA[user_id] = {
             "name": first_name,
             "username": username or "Mavjud emas",
-            "balance": 1000, # Yangi o'yinchilarga start bonus
+            "balance": 1000, # Yangi o'yinchilarga start bonus tangalar
             "games_played": 0,
             "wins": 0
         }
@@ -35,14 +35,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Bu yerda siz do'stlaringiz bilan mafiya o'ynashingiz va shaxsiy hisobingizni boshqarishingiz mumkin."
     )
     
-    # TrueMafia uslubidagi inline tugmalar
+    # TrueMafia uslubidagi ajoyib inline tugmalar
     keyboard = [
         [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("🎲 Guruhga kirish", callback_data="join_group"), InlineKeyboardButton("🇺🇿 Til / Language", callback_data="change_lang")],
         [InlineKeyboardButton("👤 Profil", callback_data="view_profile"), InlineKeyboardButton("🎭 Rollar", callback_data="view_roles")]
     ]
     
-    # Faqat siz kirganingizda Admin Panel tugmasi ham qo'shiladi
+    # Faqat siz kirganingizda menyuda Admin Panel tugmasi ham paydo bo'ladi
     if user.id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
         
@@ -136,12 +136,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(TOKEN).build()
     
-    application.add_filename = "mafia_bot_public.py"
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    logging.info("Bot admin panel bilan muvaffaqiyatli yoqildi...")
+    logging.info("Bot admin panel bilan muvaffaqiyatli tayyorlandi...")
     application.run_polling()
 
 if __name__ == '__main__':
