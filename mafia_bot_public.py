@@ -61,41 +61,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
+async def send_ask_to_admin(user, amount, context):
+    """Sening lichkangga tasdiqlash tugmalari bilan yuboradigan maxsus funksiya"""
+    u_id = user.id
+    admin_kb = [
+        [
+            InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{u_id}_{amount}"),
+            InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{u_id}")
+        ]
+    ]
+    
+    admin_msg = (
+        f"🔔 *Yangi Olmos So'rovi!*\n\n"
+        f"👤 O'yinchi: {user.first_name}\n"
+        f"🆔 ID: `{u_id}`\n"
+        f"🌐 Username: @{user.username or 'yoq'}\n"
+        f"💰 So'ralgan miqdor: *{amount} 💎*\n\n"
+        f"Quyidagi tugmalardan birini bosing:"
+    )
+    try:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(admin_kb))
+    except Exception:
+        pass
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
     text = update.message.text
 
-    # Agar foydalanuvchi olmos miqdorini kiritayotgan bo'lsa
+    # Agar foydalanuvchi o'zi qo'lda miqdor kiritayotgan bo'lsa
     if u_id in ASK_STATE and ASK_STATE[u_id] == "waiting_amount":
         if not text.isdigit() or int(text) <= 0:
             await update.message.reply_text("❌ Iltimos, faqat musbat son kiriting (Masalan: 50):")
             return
         
         amount = int(text)
-        ASK_STATE[u_id] = "done" # Holatni yopamiz
+        ASK_STATE[u_id] = "done"
         
         await update.message.reply_text(f"⏳ {amount} ta olmos so'rovi adminga yuborildi. Tasdiqlanishini kuting...")
-        
-        # Admin lichkasiga tugmalar bilan yuborish
-        admin_kb = [
-            [
-                InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{u_id}_{amount}"),
-                InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{u_id}")
-            ]
-        ]
-        
-        admin_msg = (
-            f"🔔 *Yangi Olmos So'rovi!*\n\n"
-            f"👤 O'yinchi: {update.effective_user.first_name}\n"
-            f"🆔 ID: `{u_id}`\n"
-            f"🌐 Username: @{update.effective_user.username or 'yoq'}\n"
-            f"💰 So'ralgan miqdor: *{amount} 💎*\n\n"
-            f"Quyidagi tugmalardan birini bosing:"
-        )
-        try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(admin_kb))
-        except Exception:
-            await update.message.reply_text("⚠️ Xatolik! Admin hali botni faollashtirmagan.")
+        await send_ask_to_admin(update.effective_user, amount, context)
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -123,13 +126,34 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
+    # OYINCHI OLMOS SORASH TUGMASINI BOSGANDA (20, 30, 40 variantlar chiqadi)
     elif query.data == "ask":
-        ASK_STATE[u_id] = "waiting_amount"
-        await query.edit_message_text(
-            "💰 *Necha ta olmos so'ramoqchisiz?*\n\nIltimos, miqdorni raqamda yozib yuboring (Masalan: 100):",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bekor qilish", callback_data="home")]])
-        )
+        text = "💰 *Qancha olmos so'ramoqchisiz?*\n\nTayyor miqdorlardan birini tanlang yoki o'zingiz yozing:"
+        kb = [
+            [
+                InlineKeyboardButton("20 💎", callback_data="amt_20"),
+                InlineKeyboardButton("30 💎", callback_data="amt_30"),
+                InlineKeyboardButton("40 💎", callback_data="amt_40")
+            ],
+            [InlineKeyboardButton("✍️ Boshqa miqdor", callback_data="amt_custom")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]
+        ]
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+    # TAYYOR TUGMALAR BOSILGANDA
+    elif query.data.startswith("amt_"):
+        mode = query.data.split("_")[1]
+        if mode == "custom":
+            ASK_STATE[u_id] = "waiting_amount"
+            await query.edit_message_text(
+                "✍️ *Siz xohlagan olmos miqdorini raqamda yozib yuboring:*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bekor qilish", callback_data="ask")]])
+            )
+        else:
+            amount = int(mode)
+            await query.edit_message_text(f"⏳ {amount} ta olmos so'rovi adminga yuborildi. Tasdiqlanishini kuting...")
+            await send_ask_to_admin(query.from_user, amount, context)
 
     # ADMIN TASDIQLASH TUGMASI BOSILGANDA
     elif query.data.startswith("approve_"):
@@ -245,9 +269,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
     app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)) # Matnlarni tutish
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-        
+    
