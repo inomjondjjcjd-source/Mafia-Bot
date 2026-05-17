@@ -4,9 +4,9 @@ import asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Render o'chib qolmasligi uchun mitti veb-server
+# Render o'chib qolmasligi uchun veb-server
 server = Flask('')
 @server.route('/')
 def home(): return "Mafia Bot Tirik!"
@@ -17,8 +17,7 @@ def run_server():
 
 # Bot Tokeni va Admin sozlamalari
 TOKEN = "8771036463:AAFtaCJUKZmB7B0fazFKkZ_slVN7eHtHn2A"
-ADMIN_ID = 7920504062
-ADMIN_GROUP_ID = -1002447990504  # Admin guruhingiz IDsi
+ADMIN_ID = 7920504062  # Sening Telegram ID raqaming (Xabarlar pramoy shu yerga boradi)
 
 USER_DATA = {}
 GAMES = {}
@@ -27,7 +26,8 @@ def get_user(user_id, name, username):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "name": name, "username": username or "yo'q",
-            "balance": 100, "role": "Tasodifiy 🎲", "armor": False, "wins": 0
+            "balance": 100, "role": "Tasodifiy 🎲", "armor": False, "wins": 0,
+            "used_promo": False
         }
     if user_id == ADMIN_ID:
         USER_DATA[user_id]["balance"] = 999999
@@ -59,12 +59,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    if update.effective_chat.type in ["group", "supergroup"]: return
+        
     if not context.args or context.args[0] != "255500":
         await update.message.reply_text("❌ Noto'g'ri promo-kod!")
         return
+        
     db = get_user(user_id, update.effective_user.first_name, update.effective_user.username)
-    db["balance"] += 500
-    await update.message.reply_text("🎉 +500 💎 hisobingizga qo'shildi!")
+    if db.get("used_promo", False):
+        await update.message.reply_text("🚫 Siz ushbu promo-koddan allaqachon foydalangansiz!")
+        return
+        
+    db["used_promo"] = True
+    if user_id != ADMIN_ID: db["balance"] += 100
+    await update.message.reply_text("🎉 Promo-kod muvaffaqiyatli faollashdi! Hisobingizga +100 💎 qo'shildi!")
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -109,30 +117,69 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "ask":
         try:
-            await context.bot.send_message(chat_id=ADMIN_GROUP_ID, text=f"🔔 *Olmos So'rovi!*\n\n👤 Foydalanuvchi: {query.from_user.first_name}\n🆔 ID: `{u_id}`\n🌐 Username: @{query.from_user.username or 'yoq'}\n\nTekin olmos so'ramoqda!")
-            await query.edit_message_text("✅ So'rov adminga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
+            # Xabar to'g'ridan-to'g'ri sening shaxsingga (lichkangga) boradi
+            await context.bot.send_message(
+                chat_id=ADMIN_ID, 
+                text=f"🔔 *Olmos So'rovi (Lichkaga)!*\n\n👤 O'yinchi: {query.from_user.first_name}\n🆔 ID: `{u_id}`\n🌐 Username: @{query.from_user.username or 'yoq'}\n\nUshbu foydalanuvchi tekin olmos so'ramoqda!"
+            )
+            await query.edit_message_text("✅ So'rovingiz to'g'ridan-to'g'ri bosh admin lichkasiga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
         except Exception:
-            await query.edit_message_text("⚠️ Xatolik! Admin guruhi topilmadi.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
+            await query.edit_message_text("⚠️ Xatolik! Botga avval shaxsiy xabar yuborib `/start` bosgan bo'lishingiz kerak.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
 
     elif query.data.startswith("j_"):
         g_id = int(query.data.split("_")[1])
-        if g_id in GAMES and u_id not in GAMES[g_id]["players"] and len(GAMES[g_id]["players"]) < 10:
-            GAMES[g_id]["players"][u_id] = {"name": query.from_user.first_name, "role": None, "alive": True}
-            await context.bot.send_message(chat_id=g_id, text=f"✅ *{query.from_user.first_name}* o'yinga qo'shildi!", parse_mode="Markdown")
+        if g_id in GAMES and GAMES[g_id]["status"] == "join":
+            if u_id not in GAMES[g_id]["players"] and len(GAMES[g_id]["players"]) < 10:
+                GAMES[g_id]["players"][u_id] = {"name": query.from_user.first_name, "role": None, "alive": True}
+                await context.bot.send_message(chat_id=g_id, text=f"✅ *{query.from_user.first_name}* o'yinga qo'shildi!")
+
+    elif query.data.startswith("admin_start_"):
+        g_id = int(query.data.split("_")[2])
+        if u_id != ADMIN_ID: return
+        if g_id in GAMES and GAMES[g_id]["status"] == "join":
+            if len(GAMES[g_id]["players"]) < 4:
+                await context.bot.send_message(chat_id=g_id, text="⚠️ O'yinni boshlash uchun kamida 4 ta odam qo'shilishi kerak!")
+                return
+            GAMES[g_id]["status"] = "playing"
+            await start_game_logic(g_id, context)
+
+    elif query.data.startswith("admin_stop_"):
+        g_id = int(query.data.split("_")[2])
+        if u_id != ADMIN_ID: return
+        if g_id in GAMES and GAMES[g_id]["status"] != "ended":
+            GAMES[g_id]["status"] = "ended"
+            await context.bot.send_message(chat_id=g_id, text="🛑 O'yin admin tomonidan majburiy to'xtatildi!")
 
 async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g_id = update.effective_chat.id
     if update.effective_chat.type not in ["group", "supergroup"]: return
+    
     GAMES[g_id] = {"status": "join", "players": {}}
-    kb = [[InlineKeyboardButton("➕ Qo'shilish", callback_data=f"j_{g_id}")]]
-    await update.message.reply_text("🎬 *Mafiya o'yini boshlandi!*\n\nKamida 4 ta ishtirokchi kerak. Vaqt: 30 soniya.", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     
-    await asyncio.sleep(30)
-    if len(GAMES[g_id]["players"]) < 4:
-        await context.bot.send_message(chat_id=g_id, text="❌ O'yinchilar yetarli emas! O'yin bekor qilindi.")
-        return
+    kb = [
+        [InlineKeyboardButton("➕ O'yinga qo'shilish", callback_data=f"j_{g_id}")],
+        [InlineKeyboardButton("▶️ O'yinni boshlash (Admin)", callback_data=f"admin_start_{g_id}")],
+        [InlineKeyboardButton("🛑 O'yinni to'xtatish (Admin)", callback_data=f"admin_stop_{g_id}")]
+    ]
     
-    # Rollarni tarqatish
+    await update.message.reply_text(
+        "🎬 *True Mafia o'yini boshlandi!*\n\n"
+        "🔔 Ro'yxatdan o'tish vaqti: *140 soniya*.\n"
+        "Kamida 4 ta ishtirokchi yig'ilishi shart.", 
+        parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb)
+    )
+    
+    # 140 soniya kutish sharti
+    await asyncio.sleep(140)
+    if g_id in GAMES and GAMES[g_id]["status"] == "join":
+        if len(GAMES[g_id]["players"]) < 4:
+            await context.bot.send_message(chat_id=g_id, text="❌ O'yinchilar yetarli bo'lmadi. O'yin bekor qilindi.")
+            GAMES[g_id]["status"] = "ended"
+            return
+        GAMES[g_id]["status"] = "playing"
+        await start_game_logic(g_id, context)
+
+async def start_game_logic(g_id, context):
     p_ids = list(GAMES[g_id]["players"].keys())
     random.shuffle(p_ids)
     GAMES[g_id]["players"][p_ids[0]]["role"] = "Mafiya 🕶"
@@ -146,20 +193,11 @@ async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=g_id, text="🎭 Rollar shaxsiy xabarlarga yuborildi!\n\n🌌 *Tun boshlanmoqda...*")
 
-async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        t_id, amt = int(context.args[0]), int(context.args[1])
-        get_user(t_id, "O'yinchi", "")["balance"] += amt
-        await update.message.reply_text(f"💎 ID `{t_id}` ga {amt} olmos berildi!")
-    except Exception: pass
-
 def main():
     Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handler(CommandHandler("give", give_cmd))
     app.add_handler(CommandHandler("promokod", promo))
     app.add_handler(CallbackQueryHandler(buttons))
     app.run_polling(drop_pending_updates=True)
