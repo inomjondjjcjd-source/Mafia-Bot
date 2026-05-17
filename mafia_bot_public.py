@@ -8,10 +8,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 # Loglarni sozlash
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Siz bergan mutlaqo yangi va toza token!
+# 🔑 Siz bergan yangi toza token!
 TOKEN = "8798029139:AAHMun4oeWPbbH5uFPpadm2qqpx_k_OFj3c"
 
-# 👑 Sizning Telegram ID raqamingiz (Admin)
+# 👑 Admin ID
 ADMIN_ID = 7920504062
 ADMIN_GROUP_ID = 7920504062 
 
@@ -23,19 +23,17 @@ def get_or_create_user(user_id, username, first_name):
         USER_DATA[user_id] = {
             "name": first_name,
             "username": username or "Mavjud emas",
-            "balance": 100,  # Yangi o'yinchilarga boshlang'ich 100 olmos
+            "balance": 100,  
             "selected_role": "Tasodifiy",
             "has_armor": False,
             "wins": 0,
             "games_played": 0,
-            "used_promo": False  # Promo-kod ishlatilganini tekshirish uchun
+            "used_promo": False  
         }
-    # Admin balansi har doim cheksiz bo'ladi!
     if user_id == ADMIN_ID:
         USER_DATA[user_id]["balance"] = float('inf')
     return USER_DATA[user_id]
 
-# Bosh menyu (Shaxsiyda)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     db_user = get_or_create_user(user.id, user.username, user.first_name)
@@ -62,7 +60,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# 🎁 Promo-kod tizimi (150 olmos bir marta)
 async def promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     db_user = get_or_create_user(user_id, update.effective_user.username, update.effective_user.first_name)
@@ -72,7 +69,6 @@ async def promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     code = context.args[0].strip()
-    
     if code != "255500":
         await update.message.reply_text("❌ Noto'g'ri promo-kod kiritdingiz!")
         return
@@ -87,7 +83,6 @@ async def promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await update.message.reply_text("🎉 **Tabriklaymiz!** Maxfiy kod muvaffaqiyatli faollashdi. Hisobingizga **150 ta olmos** qo'shildi! 💎")
 
-# 🛑 Faqat Admin uchun o'yinni majburiy to'xtatish buyrug'i
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if update.effective_user.id != ADMIN_ID:
@@ -101,7 +96,6 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     GAMES[chat_id]["status"] = "ended"
     await update.message.reply_text("🛑 **O'yin bot admini tomonidan majburiy ravishda to'xtatildi!**")
 
-# 💎 Reply orqali /give buyrug'i
 async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     giver = get_or_create_user(user_id, update.effective_user.username, update.effective_user.first_name)
@@ -132,12 +126,8 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     receiver = get_or_create_user(target_user.id, target_user.username, target_user.first_name)
     receiver["balance"] += amount
     
-    await update.message.reply_text(
-        f"✅ **Muvaffaqiyatli o'tkazildi!**\n"
-        f"👤 {update.effective_user.first_name} o'z hisobidan **{target_user.first_name}**ga *{amount}* olmos berdi! 💎"
-    )
+    await update.message.reply_text(f"✅ **Muvaffaqiyatli o'tkazildi!**\n👤 {update.effective_user.first_name} o'z hisobidan **{target_user.first_name}**ga *{amount}* olmos berdi! 💎")
 
-# Guruhda o'yin yaratish
 async def game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
@@ -169,7 +159,6 @@ async def game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# Tun bosqichi (Faol bo'lmaganlarni o'ldirish tizimi bilan)
 async def start_night(chat_id, context):
     game = GAMES.get(chat_id)
     if not game or game["status"] == "ended": return
@@ -195,7 +184,6 @@ async def start_night(chat_id, context):
 
     await asyncio.sleep(45)
     
-    # 💤 TUNDA UXLAB QOLGAN (AFK) AKTIV ROLLARNI AVTOMATIK O'LDIRISH
     if game["status"] == "ended": return
     afk_players = []
     for p_id, p_info in game["players"].items():
@@ -210,12 +198,11 @@ async def start_night(chat_id, context):
     for afk_id in afk_players:
         game["players"][afk_id]["alive"] = False
         try:
-            await context.bot.send_message(chat_id=chat_id, text=f"💤 **{game['players'][afk_id]['name']}** tunda harakat qilmagani (AFK) sababli avtomatik vafot etdi! Roli: *{game['players'][afk_id]['role']}*")
+            await context.bot.send_message(chat_id=chat_id, text=f"💤 **{game['players'][afk_id]['name']}** tunda uxlagani (AFK) sababli avtomatik vafot etdi! Roli: *{game['players'][afk_id]['role']}*")
         except Exception: pass
         
     await start_day(chat_id, context)
 
-# Kun bosqichi (Faol bo'lmagan ovoz bermaganlarni o'ldirish tizimi bilan)
 async def start_day(chat_id, context):
     game = GAMES.get(chat_id)
     if not game or game["status"] == "ended": return
@@ -230,12 +217,12 @@ async def start_day(chat_id, context):
         p_user = USER_DATA.get(killed_id, {})
         if p_user.get("has_armor", False):
             p_user["has_armor"] = False  
-            result_text = f"🌅 **Tong otdi!**\n\n🌃 Bu kecha mafiya kimdirga o'q uzdi, biroq o'yinchi egnidagi **🛡 Bronijilet (Zirh)** tufayli o'limdan omon qoldi! Hech kim o'lmadi."
+            result_text = f"🌅 **Tong otdi!**\n\n🌃 Bu kecha mafiya kimdirga o'q uzdi, biroq o'yinchi egnidagi **🛡 Bronijilet (Zirh)** tufayli o'limdan omon qoldi!"
         elif killed_id == game["doc_vote"]:
-            result_text = "🌅 **Tong otdi!**\n\n🌃 Mafiya tunda suiqasd uyushtirdi, lekin **Shifokor** o'z vaqtida kelib yaradorni qutqardi! Hech kim o'lmadi."
+            result_text = "🌅 **Tong otdi!**\n\n🌃 Mafiya tunda suiqasd uyushtirdi, lekin **Shifokor** yaradorni qutqardi! Hech kim o'lmadi."
         else:
             game["players"][killed_id]["alive"] = False
-            result_text = f"🌅 **Tong otdi!**\n\n💀 Mudhish xabar: Bu kecha **{game['players'][killed_id]['name']}** otib ketildi! Roli: *{game['players'][killed_id]['role']}*"
+            result_text = f"🌅 **Tong otdi!**\n\n💀 Bu kecha **{game['players'][killed_id]['name']}** otib ketildi! Roli: *{game['players'][killed_id]['role']}*"
     else:
         result_text = "🌅 **Tong otdi!**\n\n🌃 Bu kecha talofatlar yo'q, shahar tinch."
         
@@ -244,7 +231,7 @@ async def start_day(chat_id, context):
     
     vote_kb = [[InlineKeyboardButton(t_info["name"], callback_data=f"day_vote_{chat_id}_{t_id}")] 
                for t_id, t_info in game["players"].items() if t_info["alive"]]
-    await context.bot.send_message(chat_id=chat_id, text=f"🗣 **Muhokama va Ovoz berish boshlandi! (45 soniya)**\nOvoz bermaganlar avtomatik o'ladi! Gumonlanuvchiga ovoz bering:", reply_markup=InlineKeyboardMarkup(vote_kb))
+    await context.bot.send_message(chat_id=chat_id, text=f"🗣 **Muhokama va Ovoz berish boshlandi! (45 soniya)**\nOvoz bermaganlar o'ladi!", reply_markup=InlineKeyboardMarkup(vote_kb))
     
     await asyncio.sleep(45)
     await end_day_voting(chat_id, context)
@@ -253,7 +240,6 @@ async def end_day_voting(chat_id, context):
     game = GAMES.get(chat_id)
     if not game or game["status"] == "ended": return
     
-    # 💤 KUNDUZI OVOZ BERMAGAN HAFFASIZ O'YINCHILARNI AVTOMATIK O'LDIRISH
     afk_voters = []
     for p_id, p_info in game["players"].items():
         if p_info["alive"] and p_id not in game["day_votes"]:
@@ -262,19 +248,19 @@ async def end_day_voting(chat_id, context):
     for afk_id in afk_voters:
         game["players"][afk_id]["alive"] = False
         try:
-            await context.bot.send_message(chat_id=chat_id, text=f"💤 **{game['players'][afk_id]['name']}** ovoz berishda qatnashmagani (AFK) sababli avtomatik vafot etdi! Roli: *{game['players'][afk_id]['role']}*")
+            await context.bot.send_message(chat_id=chat_id, text=f"💤 **{game['players'][afk_id]['name']}** ovoz bermagani (AFK) sababli avtomatik vafot etdi! Roli: *{game['players'][afk_id]['role']}*")
         except Exception: pass
         
     if await check_game_over(chat_id, context): return
 
     if not game["day_votes"]:
-        await context.bot.send_message(chat_id=chat_id, text="💤 Bugun hech kim ovoz bermadi. Sud o'tkazilmadi.")
+        await context.bot.send_message(chat_id=chat_id, text="💤 Bugun hech kim ovoz bermadi.")
         await start_night(chat_id, context)
         return
         
     lynched_id = max(set(game["day_votes"].values()), key=list(game["day_votes"].values()).count)
     game["players"][lynched_id]["alive"] = False
-    await context.bot.send_message(chat_id=chat_id, text=f"⚖️ Guruh qaroriga ko'ra **{game['players'][lynched_id]['name']}** sud qilinib osildi. Roli: *{game['players'][lynched_id]['role']}*")
+    await context.bot.send_message(chat_id=chat_id, text=f"⚖️ Guruh qaroriga ko'ra **{game['players'][lynched_id]['name']}** osildi. Roli: *{game['players'][lynched_id]['role']}*")
     
     if await check_game_over(chat_id, context): return
     await start_night(chat_id, context)
@@ -285,17 +271,16 @@ async def check_game_over(chat_id, context):
     citizens = sum(1 for p in game["players"].values() if p["alive"] and p["role"] != "Mafiya")
     
     if mafia == 0:
-        await context.bot.send_message(chat_id=chat_id, text="🎉 **Tinch aholi g'alaba qozondi!** Barcha mafiyalar qirildi.")
+        await context.bot.send_message(chat_id=chat_id, text="🎉 **Tinch aholi g'alaba qozondi!**")
         for p_id in game["players"]: USER_DATA[p_id]["wins"] += 1
         game["status"] = "ended"
         return True
     elif mafia >= citizens:
-        await context.bot.send_message(chat_id=chat_id, text="🔴 **Mafiya g'alaba qozondi!** Shahar mafiya qo'liga o'tdi.")
+        await context.bot.send_message(chat_id=chat_id, text="🔴 **Mafiya g'alaba qozondi!**")
         game["status"] = "ended"
         return True
     return False
 
-# Adminga Reply orqali Olmos berish tasdig'i
 async def admin_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     if not update.message.reply_to_message: return
@@ -309,14 +294,12 @@ async def admin_reply_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             user = get_or_create_user(target_id, "", "Foydalanuvchi")
             user["balance"] += amount
             
-            await update.message.reply_text(f"✅ Foydalanuvchiga *{amount}* olmos muvaffaqiyatli o'tkazildi!", parse_mode="Markdown")
-            try:
-                await context.bot.send_message(chat_id=target_id, text=f"🎁 **Admin so'rovingizni tasdiqladi!** Hisobingizga *{amount}* olmos qo'shildi!")
+            await update.message.reply_text(f"✅ Foydalanuvchiga *{amount}* olmos o'tkazildi!", parse_mode="Markdown")
+            try: await context.bot.send_message(chat_id=target_id, text=f"🎁 Hisobingizga *{amount}* olmos qo'shildi!")
             except Exception: pass
         except Exception:
-            await update.message.reply_text("❌ Iltimos, faqat kerakli son miqdorini to'g'ri yozing!")
+            await update.message.reply_text("❌ Faqat son kiriting!")
 
-# Callback Tugmalar
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -327,13 +310,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if u_id not in GAMES[chat_id]["players"]:
             GAMES[chat_id]["players"][u_id] = {"name": query.from_user.first_name, "role": None, "alive": True}
             USER_DATA[u_id]["games_played"] += 1
-            await query.message.edit_text(f"🎮 **TrueMafia O'yini!**\n\n👥 O'yinchilar jami: {len(GAMES[chat_id]['players'])} ta\n🏃 Oxirgi qo'shilgan: {query.from_user.first_name}", 
+            await query.message.edit_text(f"🎮 **TrueMafia O'yini!**\n\n👥 O'yinchilar: {len(GAMES[chat_id]['players'])} ta\n🏃 Oxirgi qo'shilgan: {query.from_user.first_name}", 
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ O'yinga qo'shilish", callback_data="join_game")],[InlineKeyboardButton("🚀 O'yinni start berish", callback_data="start_game")]]))
 
     elif query.data == "start_game" and chat_id in GAMES and GAMES[chat_id]["status"] == "join_period":
         p_ids = list(GAMES[chat_id]["players"].keys())
         if len(p_ids) < 3:
-            await context.bot.send_message(chat_id=chat_id, text="❌ O'yinni boshlash uchun kamida 3 ta odam kerak!")
+            await context.bot.send_message(chat_id=chat_id, text="❌ Kamida 3 ta odam kerak!")
             return
             
         random.shuffle(p_ids)
@@ -355,12 +338,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start_night(chat_id, context)
 
     elif query.data == "open_shop":
-        text = (
-            f"🛒 **TrueMafia do'koni**\n\n"
-            f"🔴 Mafiya roli — 30 💎\n🔵 Komissar roli — 25 💎\n🟢 Shifokor roli — 20 💎\n"
-            f"🦺 Bronijilet (Zirh) — 50 💎\n\n"
-            f"Balansingiz: {db_user['balance']} 💎"
-        )
+        text = f"🛒 **TrueMafia do'koni**\n\n🔴 Mafiya — 30 💎\n🔵 Komissar — 25 💎\n🟢 Shifokor — 20 💎\n🦺 Zirh — 50 💎\n\nBalansingiz: {db_user['balance']} 💎"
         kb = [
             [InlineKeyboardButton("🔴 Mafiya (30 💎)", callback_data="buy_Mafiya"), InlineKeyboardButton("🔵 Komissar (25 💎)", callback_data="buy_Komissar")],
             [InlineKeyboardButton("🟢 Shifokor (20 💎)", callback_data="buy_Shifokor"), InlineKeyboardButton("🦺 Zirh (50 💎)", callback_data="buy_armor")],
@@ -372,30 +350,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = query.data.split("_")[1]
         prices = {"Mafiya": 30, "Komissar": 25, "Shifokor": 20, "armor": 50}
         price = prices[item]
-        
         if u_id != ADMIN_ID and db_user["balance"] < price:
-            await context.bot.send_message(chat_id=u_id, text="❌ Mablag'ingiz yetarli emas!")
+            await context.bot.send_message(chat_id=u_id, text="❌ Olmos yetarli emas!")
             return
-            
         if u_id != ADMIN_ID: db_user["balance"] -= price
-        
         if item == "armor":
             db_user["has_armor"] = True
-            await query.edit_message_text("✅ Siz muvaffaqiyatli zirh (bronijilet) sotib oldingiz!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Do'kon", callback_data="open_shop")]]))
+            await query.edit_message_text("✅ Zirh sotib olindi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Do'kon", callback_data="open_shop")]]))
         else:
             db_user["selected_role"] = item
-            await query.edit_message_text(f"✅ Sotib olindi! Keyingi o'yinda rolingiz: **{item}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Do'kon", callback_data="open_shop")]]))
+            await query.edit_message_text(f"✅ Sotib olindi! Rol: **{item}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Do'kon", callback_data="open_shop")]]))
 
     elif query.data == "ask_diamonds":
-        await context.bot.send_message(
-            chat_id=ADMIN_GROUP_ID,
-            text=f"💎 **Olmos so'rovi!**\n\nFoydalanuvchi: {query.from_user.first_name}\nID: `{u_id}`\n\nUnga olmos berish uchun ushbu xabarga **Reply (Javob)** qilib faqat sonni o'zini yozing!"
-        )
-        await context.bot.send_message(chat_id=u_id, text="✅ So'rovingiz adminga yuborildi!")
+        await context.bot.send_message(ADMIN_GROUP_ID, text=f"💎 **Olmos so'rovi!**\nFoydalanuvchi: {query.from_user.first_name}\nID: `{u_id}`\n\nReply qilib son yozing!")
+        await context.bot.send_message(chat_id=u_id, text="✅ So'rov adminga ketdi!")
 
     elif query.data == "view_top":
         sorted_users = sorted(USER_DATA.items(), key=lambda x: x[1]['wins'], reverse=True)[:5]
-        top_text = "🏆 **Top 5 O'yinchilar (Reyting):**\n\n"
+        top_text = "🏆 **Top 5 O'yinchilar:**\n\n"
         for idx, (usr_id, usr_info) in enumerate(sorted_users, 1):
             top_text += f"{idx}. {usr_info['name']} — {usr_info['wins']} ta yutuq 🏆\n"
         await query.edit_message_text(top_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]), parse_mode="Markdown")
@@ -404,4 +376,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bal = "Cheksiz 💎" if u_id == ADMIN_ID else f"{db_user['balance']:,} 💎"
         kb = [
             [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
-            [InlineKeyboardButton("🛒 Sho
+            [InlineKeyboardButton("🛒 Shop (Do'kon)", callback_data="open_shop"), InlineKeyboardButton("🏆 Reyting", callback_data="view_top")],
+            [InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask_diamonds")]
+        ]
+        await query.edit_message_text(f"🕵️‍♂️ **True Mafia Bot!**\n\n💎 Balansingiz: *{bal}*", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+
+    elif query.data.startswith("night_act_"):
+        parts = query.data.split("_")
+        g_id, target_id = int(parts[2]), int(parts[3])
+        if g_id not in GAMES or GAMES[g_id]["status"] != "night": return
+        my_role = GAMES[g_id]["players"][u_id]["role"]
+        
+        if my_role == "Mafiya":
+            GAMES[g_id]["mafia_vote"][u_id] = target_id
+            await query.edit_message_text(f"🎯 Nishon: {GAMES[g_id]['players'][target_id]['name']}")
+        elif my_role == "Shifokor":
+            GAMES[g_id]["doc_vote"] = target_id
+            await query.edit_message_text(f"🟢 Davolash: {GAMES[g_id]['players'][target_id]['name']}")
+        elif my_role == "Komissar":
+            GAMES[g_id]["cop_vote"] = target_id
+            is_mafia = "Mafiya 🔴" if GAMES[g_id]["players"][target_id]["role"] == "Mafiya" else "Tinch aholi 🟢"
+            await query.edit_message_text(f"🔍 Natija: — **{is_mafia}**")
+
+    elif query.data.startswith("day_vote_"):
+        parts = query.data.split("_")
+        g_i
