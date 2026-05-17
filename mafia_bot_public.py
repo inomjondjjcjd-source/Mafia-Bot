@@ -18,6 +18,14 @@ ADMIN_GROUP_ID = -7920504062
 USER_DATA = {}
 GAMES = {}
 
+# Rol nomlarini callback_data uchun xavfsiz formatga o'tkazish
+ROLE_CALLBACK_MAP = {
+    "Mafiya": "mafia",
+    "Shifokor": "doc",
+    "Komissar": "cop",
+    "Tinch aholi": "tinch"
+}
+
 def get_or_create_user(user_id, username, first_name):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
@@ -27,7 +35,7 @@ def get_or_create_user(user_id, username, first_name):
             "selected_role": "Tasodifiy",
             "has_armor": False,
             "wins": 0,
-            "games_played": 0,
+            "games_played": 0,  # BUG FIX 2: hisoblanadi
             "used_promo": False
         }
     if user_id == ADMIN_ID:
@@ -170,6 +178,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         GAMES[g_id]["players"][u_id] = {"id": u_id, "name": query.from_user.first_name, "role": None, "alive": True}
         await context.bot.send_message(chat_id=g_id, text=f"{query.from_user.first_name} o'yinga qo'shildi!")
 
+    # BUG FIX 1: cop_vote endi alohida saqlanadi (doc_vote ga emas)
+    # BUG FIX 3: "tinch" callback nomi xavfsiz, role.lower() o'rniga ROLE_CALLBACK_MAP ishlatiladi
     elif query.data.startswith("mafia_vote_") or query.data.startswith("doc_vote_") or query.data.startswith("cop_vote_"):
         parts = query.data.split("_")
         action = parts[0]
@@ -177,6 +187,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_id = int(parts[3])
         
         if g_id not in GAMES or GAMES[g_id]["status"] != "night":
+            return
+        if u_id not in GAMES[g_id]["players"]:
             return
             
         my_role = GAMES[g_id]["players"][u_id]["role"]
@@ -187,9 +199,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             GAMES[g_id]["doc_vote"] = target_id
             await query.edit_message_text(f"Tanlandi: {GAMES[g_id]['players'][target_id]['name']}")
         elif action == "cop" and my_role == "Komissar":
-            GAMES[g_id]["doc_vote"] = target_id
+            GAMES[g_id]["cop_vote"] = target_id  # BUG FIX 1: cop_vote ga yoziladi
             is_mafia = "Mafiya" if GAMES[g_id]["players"][target_id]["role"] == "Mafiya" else "Tinch aholi"
-            await query.edit_message_text(f"Natija: {is_mafia}")
+            await query.edit_message_text(f"Tekshiruv natijasi: {GAMES[g_id]['players'][target_id]['name']} — {is_mafia}")
 
     elif query.data.startswith("day_vote_"):
         parts = query.data.split("_")
@@ -197,10 +209,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_id = int(parts[3])
         if g_id not in GAMES or GAMES[g_id]["status"] != "day":
             return
+        if u_id not in GAMES[g_id]["players"]:
+            return
         if not GAMES[g_id]["players"][u_id]["alive"]:
             return
         GAMES[g_id]["day_votes"][u_id] = target_id
-        await context.bot.send_message(chat_id=g_id, text=f"Ovoz berildi!")
+        await query.answer("Ovozingiz qabul qilindi!", show_alert=True)
 
 async def game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g_id = update.effective_chat.id
@@ -217,7 +231,7 @@ async def game_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "players": {},
         "mafia_vote": None,
         "doc_vote": None,
-        "cop_vote": None,
+        "cop_vote": None,  # BUG FIX 1: alohida maydon
         "day_votes": {},
         "cycle": 1
     }
@@ -242,7 +256,8 @@ async def start_mafia_game(g_id, context):
     GAMES[g_id]["players"][p_ids[2]]["role"] = "Komissar"
     for i in range(3, len(p_ids)):
         GAMES[g_id]["players"][p_ids[i]]["role"] = "Tinch aholi"
-        
+
+    # Rol ustuvorligi: do'kondan sotib olingan rolni berish
     for p_id in p_ids:
         db_user = USER_DATA.get(p_id, {})
         wanted = db_user.get("selected_role", "Tasodifiy")
@@ -253,6 +268,11 @@ async def start_mafia_game(g_id, context):
                 current_role_owner["role"] = old_role
                 GAMES[g_id]["players"][p_id]["role"] = wanted
             db_user["selected_role"] = "Tasodifiy"
+
+    # BUG FIX 2: games_played ni oshirish
+    for p_id in p_ids:
+        if p_id in USER_DATA:
+            USER_DATA[p_id]["games_played"] += 1
 
     for p_id, p_data in GAMES[g_id]["players"].items():
         try:
@@ -267,15 +287,21 @@ async def run_night(g_id, context):
     GAMES[g_id]["status"] = "night"
     GAMES[g_id]["mafia_vote"] = None
     GAMES[g_id]["doc_vote"] = None
-    GAMES[g_id]["cop_vote"] = None
+    GAMES[g_id]["cop_vote"] = None  # BUG FIX 1: reset
     
     await context.bot.send_message(chat_id=g_id, text="Tun keldi. Shahar uyquga ketdi. O'yin faollari shaxsiy chatga o'ting...")
     
     for p_id, p_data in GAMES[g_id]["players"].items():
         if not p_data["alive"]:
             continue
-            
-        targets = [InlineKeyboardButton(p["name"], callback_data=f"{p_data['role'].lower()}_vote_{g_id}_{p['id']}") for p in GAMES[g_id]["players"].values() if p["alive"] and p["id"] != p_id]
+
+        # BUG FIX 3: ROLE_CALLBACK_MAP orqali xavfsiz callback nomi
+        role_key = ROLE_CALLBACK_MAP.get(p_data["role"], "tinch")
+        targets = [
+            InlineKeyboardButton(p["name"], callback_data=f"{role_key}_vote_{g_id}_{p['id']}")
+            for p in GAMES[g_id]["players"].values()
+            if p["alive"] and p["id"] != p_id
+        ]
         kb = [targets[i:i+2] for i in range(0, len(targets), 2)]
         
         if p_data["role"] == "Mafiya":
@@ -318,7 +344,11 @@ async def run_day(g_id, context):
     for p_id, p_data in GAMES[g_id]["players"].items():
         if not p_data["alive"]:
             continue
-        targets = [InlineKeyboardButton(p["name"], callback_data=f"day_vote_{g_id}_{p['id']}") for p in GAMES[g_id]["players"].values() if p["alive"]]
+        targets = [
+            InlineKeyboardButton(p["name"], callback_data=f"day_vote_{g_id}_{p['id']}")
+            for p in GAMES[g_id]["players"].values()
+            if p["alive"]
+        ]
         kb = [targets[i:i+2] for i in range(0, len(targets), 2)]
         try: await context.bot.send_message(chat_id=p_id, text="Kimga ovoz berasiz?", reply_markup=InlineKeyboardMarkup(kb))
         except Exception: pass
@@ -409,4 +439,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
