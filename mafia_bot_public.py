@@ -53,12 +53,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         armor_str = "Yo'q"
         
     text = (
-        f"🕵️‍♂️ **True Mafia Botiga Xush Kelibsiz!**\n\n"
+        "🕵️‍♂️ **True Mafia Botiga Xush Kelibsiz!**\n\n"
         f"👤 Ismingiz: {user.first_name}\n"
         f"💎 Balansingiz: {bal_str} olmos\n"
         f"🎯 Keyingi o'yin roli: *{db_user['selected_role']}*\n"
         f"🛡️ Zirh (Bronjilet): *{armor_str}*\n\n"
-        f"🎁 Maxfiy promo-kodni faollashtirish uchun: `/promokod KOD` deb yozing."
+        "🎁 Maxfiy promo-kodni faollashtirish uchun: `/promokod KOD` deb yozing."
     )
     
     keyboard = [
@@ -125,12 +125,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             armor_str = "Yo'q"
             
         text = (
-            f"🕵️‍♂️ **True Mafia Botiga Xush Kelibsiz!**\n\n"
+            "🕵️‍♂️ **True Mafia Botiga Xush Kelibsiz!**\n\n"
             f"👤 Ismingiz: {query.from_user.first_name}\n"
             f"💎 Balansingiz: {bal_str} olmos\n"
             f"🎯 Keyingi o'yin roli: *{db_user['selected_role']}*\n"
             f"🛡️ Zirh (Bronjilet): *{armor_str}*\n\n"
-            f"🎁 Maxfiy promo-kodni faollashtirish uchun: `/promokod KOD` deb yozing."
+            "🎁 Maxfiy promo-kodni faollashtirish uchun: `/promokod KOD` deb yozing."
         )
         kb = [
             [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
@@ -286,7 +286,7 @@ async def run_night(g_id, context):
     GAMES[g_id]["doc_vote"] = None
     GAMES[g_id]["cop_vote"] = None
     
-    await context.bot.send_message(chat_id=g_id, text=f"🌃 **Tun.** Shahar uyquga ketdi. O'yin faollari shaxsiy chatga o'ting...")
+    await context.bot.send_message(chat_id=g_id, text="🌃 **Tun.** Shahar uyquga ketdi. O'yin faollari shaxsiy chatga o'ting...")
     
     for p_id, p_data in GAMES[g_id]["players"].items():
         if not p_data["alive"]:
@@ -330,7 +330,7 @@ async def run_day(g_id, context):
     if await check_game_end(g_id, context):
         return
         
-    await context.bot.send_message(chat_id=g_id, text=f"🗳️ **Kunduzgi ovoz berish boshlandi!** Gumonlanuvchiga shaxsiyda ovoz bering.")
+    await context.bot.send_message(chat_id=g_id, text="🗳️ **Kunduzgi ovoz berish boshlandi!** Gumonlanuvchiga shaxsiyda ovoz bering.")
     
     for p_id, p_data in GAMES[g_id]["players"].items():
         if not p_data["alive"]:
