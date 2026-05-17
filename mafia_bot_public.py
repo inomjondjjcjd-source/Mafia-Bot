@@ -2,9 +2,6 @@ import os
 import logging
 import random
 import asyncio
-from http.server import SimpleHTTPRequestHandler
-import socketserver
-import threading
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
@@ -20,14 +17,6 @@ ADMIN_GROUP_ID = -7920504062
 
 USER_DATA = {}
 GAMES = {}
-
-# RENDER PORT MUAMMOSINI YECHISH UCHUN MITTI SERVER
-def run_dummy_server():
-    PORT = int(os.environ.get("PORT", 8080))
-    Handler = SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        logging.info(f"Render uchun port ochildi: {PORT}")
-        httpd.serve_forever()
 
 def get_or_create_user(user_id, username, first_name):
     if user_id not in USER_DATA:
@@ -406,10 +395,6 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Format: /give ID Olmos_Soni")
 
 def main():
-    # Render portini aldash uchun serverni alohida oqimda ishga tushiramiz
-    t = threading.Thread(target=run_dummy_server, daemon=True)
-    t.start()
-
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
