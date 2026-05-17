@@ -3,8 +3,10 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# Log tizimi
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
+# Tokenni olish
 TOKEN = os.environ.get("API_TOKEN", "8798029139:AAFqEcEt-q6BhXr3an0jZMjZjYsBY_C7Z0w")
 
 # 🔴 Sizning Telegram ID raqamingiz
@@ -12,7 +14,7 @@ ADMIN_ID = 7920504062
 
 USER_DATA = {}
 GAMES = {} 
-USER_STATES = {} # Foydalanuvchilarning holatini kuzatish uchun (Xabar yozish jarayoni)
+USER_STATES = {} 
 
 def get_or_create_user(user_id, username, first_name):
     if user_id not in USER_DATA:
@@ -45,7 +47,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💎 Sizning balansingiz: *{db_user['balance']:,} olmos*"
     )
     
-    # "Admin" (Adminga xabar yuborish) tugmasi qo'shildi
     keyboard = [
         [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("🛒 Rol sotib olish", callback_data="buy_role"), InlineKeyboardButton("👤 Profil", callback_data="view_profile")],
@@ -103,11 +104,12 @@ async def gift_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Siz muvaffaqiyatli ravishda `{target_id}` foydalanuvchiga *{amount}* olmos hadya qildingiz!", parse_mode="Markdown")
         try:
             await context.bot.send_message(chat_id=target_id, text=f"💎 **Ajoyib!** Admin sizga *{amount}* olmos hadya qildi!")
-        except: pass
+        except Exception:
+            pass
     except (IndexError, ValueError):
         await update.message.reply_text("❌ Noto'g'ri format. Ishlatish: `/hadya Foydalanuvchi_ID miqdori` (Masalan: `/hadya 1234567 500`)")
 
-# Tugmalar bosilishi
+# Tugmalar barchasi
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -116,7 +118,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat_id
     db_user = get_or_create_user(user_id, query.from_user.username, query.from_user.first_name)
     
-    # O'yinga qo'shilish
     if query.data == "join_the_game":
         if chat_id in GAMES:
             if user_id not in GAMES[chat_id]["players"]:
@@ -134,7 +135,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await context.bot.send_message(chat_id=user_id, text="ℹ️ Siz allaqachon o'yinga qo'shilgansiz!")
 
-    # Rol sotib olish
     elif query.data == "buy_role":
         text = (
             f"🛒 **Rollar do'koni (TrueMafia maxsus)**\n\n"
@@ -163,13 +163,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await context.bot.send_message(chat_id=user_id, text="❌ Rol sotib olish uchun olmoslaringiz yetarli emas!")
 
-    # ✍️ Admin tugmasi bosilganda
     elif query.data == "contact_admin":
         USER_STATES[user_id] = "waiting_admin_msg"
         await query.edit_message_text(
             "✍️ **Adminga xabar yuborish:**\n\n"
-            "Menga o'z fikringiz, shikoyatingiz yoki olmos so'rovnomangizni yozib qoldiring. "
-            "Xabaringiz shundoq bot egasiga yetkaziladi!",
+            "Menga o'z fikringizni yoki olmos so'rovingizni yozib qoldiring. Xabaringiz shundoq bot egasiga boradi!",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Bekor qilish", callback_data="back_to_main")]])
         )
 
@@ -185,7 +183,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "back_to_main":
         if query.message.chat.type in ["group", "supergroup"]: return
-        if user_id in USER_STATES: del USER_STATES[user_id] # holatni tozalash
+        if user_id in USER_STATES: del USER_STATES[user_id]
         
         text = f"Salom! Men 🕵️‍♂️ **Mafia** o'yinining rasmiy botiman.\n\n💎 Sizning balansingiz: *{db_user['balance']:,} olmos*"
         keyboard = [
@@ -197,20 +195,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-# Foydalanuvchi adminga yozgan xabarni tutib olib, sizga yuboradigan qism
+# Adminga xabar uzatish funksiyasi
 async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = update.effective_user
     
-    # Faqat agar foydalanuvchi "Admin" tugmasini bosgan bo'lsagina ishlaydi
     if user_id in USER_STATES and USER_STATES[user_id] == "waiting_admin_msg":
         user_msg = update.message.text
-        del USER_STATES[user_id] # holatni darhol o'chiramiz
+        del USER_STATES[user_id]
         
-        # 1. Foydalanuvchiga muvaffaqiyatli ketganini aytamiz
         await update.message.reply_text("✅ Xabaringiz bot adminiga muvaffaqiyatli yuborildi!")
         
-        # 2. SIZGA (Adminga) bildirishnoma yuboriladi
         admin_alert = (
             f"🔔 **Foydalanuvchidan yangi xabar keldi!**\n\n"
             f"👤 Ism: {user.first_name}\n"
@@ -221,6 +216,7 @@ async def handle_user_messages(update: Update, context: ContextTypes.DEFAULT_TYP
         await context.bot.send_message(chat_id=ADMIN_ID, text=admin_alert, parse_mode="Markdown")
 
 def main():
+    # Application yaratish (Aniq xatosiz format)
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
@@ -229,9 +225,10 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_messages))
     
-    logging.info("Bot qayta yuklandi...")
-    application.run_polling()
+    logging.info("Muvaffaqiyatli ishga tushdi...")
+    # drop_pending_updates=True eski tiqilib qolgan Conflict xatolarini tozalaydi!
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-    
+        
