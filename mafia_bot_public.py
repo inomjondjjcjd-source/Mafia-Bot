@@ -4,7 +4,7 @@ import asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # Render o'chib qolmasligi uchun veb-server
 server = Flask('')
@@ -17,29 +17,33 @@ def run_server():
 
 # Bot Tokeni va Admin sozlamalari
 TOKEN = "8771036463:AAFtaCJUKZmB7B0fazFKkZ_slVN7eHtHn2A"
-ADMIN_ID = 7920504062  # Sening Telegram ID raqaming
+ADMIN_ID = 7920504062  # Sening taxminiy ID raqaming
 
 USER_DATA = {}
 GAMES = {}
 
 def get_user(user_id, name, username):
+    global ADMIN_ID
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "name": name, "username": username or "yo'q",
             "balance": 100, "role": "Tasodifiy 🎲", "armor": False, "wins": 0,
             "used_promo": False
         }
-    if user_id == ADMIN_ID:
+    # AGAR SEN BOTGA START BOSSANG, BOT SENING ASLIY ID RAQAMINGNI AVTOMATIK SAQLAYDI!
+    if user_id == 7920504062 or username == "inomjon_21008":
+        ADMIN_ID = user_id
         USER_DATA[user_id]["balance"] = 999999
     return USER_DATA[user_id]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    db = get_user(user.id, user.first_name, user.username)
+    
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text("🎮 Guruhda o'yinni boshlash uchun /game buyrug'ini yuboring!")
         return
 
-    db = get_user(user.id, user.first_name, user.username)
     bal = "Cheksiz ♾" if user.id == ADMIN_ID else f"{db['balance']} 💎"
     
     text = (
@@ -117,19 +121,19 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "ask":
         try:
-            # Sening lichkangga boradigan xabar formati
+            # Xabar admin lichkasiga to'g'ridan-to'g'ri ketadi
             admin_msg = (
                 f"🔔 *Yangi Olmos So'rovi!*\n\n"
                 f"👤 O'yinchi: {query.from_user.first_name}\n"
                 f"🆔 ID: `{u_id}`\n"
                 f"🌐 Username: @{query.from_user.username or 'yoq'}\n\n"
-                f"💰 *Olmos berish uchun pastdagi buyruqni nusxalab, kerakli miqdorni yozib botga yuboring:* \n\n"
+                f"💰 *Olmos berish uchun buyruq:* \n\n"
                 f"`/give {u_id} miqdor`"
             )
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown")
             await query.edit_message_text("✅ So'rovingiz bosh admin lichkasiga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
         except Exception:
-            await query.edit_message_text("⚠️ Xatolik! Botga avval shaxsiy xabar yuborib `/start` bosgan bo'lishingiz kerak.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
+            await query.edit_message_text("⚠️ Xatolik! Iltimos, bosh admin avval botga kirib `/start` buyrug'ini berishi shart.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
 
     elif query.data.startswith("j_"):
         g_id = int(query.data.split("_")[1])
@@ -156,32 +160,29 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=g_id, text="🛑 O'yin admin tomonidan majburiy to'xtatildi!")
 
 async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return  # Faqat sen ishlata olasan
+    if update.effective_user.id != ADMIN_ID: return
     try:
         t_id = int(context.args[0])
         amt = int(context.args[1])
-        
-        # Olmosni foydalanuvchi balansiga qo'shish
         user_db = get_user(t_id, "O'yinchi", "")
         user_db["balance"] += amt
-        
-        # Senga tasdiqlash xabari
-        await update.message.reply_text(f"✅ Muvaffaqiyatli! ID `{t_id}` bo'lgan foydalanuvchiga {amt} ta olmos o'tkazildi.")
-        
-        # Olmos so'ragan odamga xabarnoma yuborish
+        await update.message.reply_text(f"✅ Muvaffaqiyatli! ID `{t_id}` ga {amt} ta olmos o'tkazildi.")
         try:
             await context.bot.send_message(
                 chat_id=t_id, 
-                text=f"🎉 *Xushxabar!*\n\nBosh admin so'rovingizni ko'rib chiqdi va hisobingizga *+{amt} 💎* qo'shdi! Hozirgi balansingiz: {user_db['balance']} olmos.",
+                text=f"🎉 *Xushxabar!*\n\nBosh admin hisobingizga *+{amt} 💎* qo'shdi! Balansingiz: {user_db['balance']} olmos.",
                 parse_mode="Markdown"
             )
         except Exception: pass
     except Exception:
-        await update.message.reply_text("❌ Xato format! Foydalanish: `/give ID miqdor` (Masalan: `/give 1234567 50`)")
+        await update.message.reply_text("❌ Xato format! `/give ID miqdor` deb yozing.")
 
 async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g_id = update.effective_chat.id
     if update.effective_chat.type not in ["group", "supergroup"]: return
+    
+    # Guruhda ham admin kimligini yangilab olishi uchun chaqiramiz
+    get_user(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
     
     GAMES[g_id] = {"status": "join", "players": {}}
     kb = [
@@ -223,11 +224,11 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handler(CommandHandler("give", give_cmd))  # Olmos berish buyrug'i qo'shildi
+    app.add_handler(CommandHandler("give", give_cmd))
     app.add_handler(CommandHandler("promokod", promo))
     app.add_handler(CallbackQueryHandler(buttons))
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-                  
+    
