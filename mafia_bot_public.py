@@ -21,12 +21,16 @@ USER_DATA = {}
 GAMES = {}
 ASK_STATE = {}  
 
+# Promokodlarni saqlash uchun global baza
+ACTIVE_PROMOCODES = {}  # {"OMADLI": 50, "SOVGA": 100} ko'rinishida saqlaydi
+
 def get_user(user_id, name, username):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "name": name, "username": username or "yoq",
             "balance": 100, "money_uzs": 0, "role": "Tasodifiy 🎲", 
-            "armor": False, "pistol": False, "camera": False, "wins": 0
+            "armor": False, "pistol": False, "camera": False, "wins": 0,
+            "used_promos": []  # Ishlatilgan promokodlar ro'yxati
         }
     if user_id == MAIN_ADMIN or user_id in ASSISTANT_ADMINS:
         USER_DATA[user_id]["balance"] = 999999
@@ -42,11 +46,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎮 Guruhda o'yinni boshlash uchun /game buyrug'ini yuboring!")
         return
 
-    text = "🕵️‍♂️ *Martin Mafia Botiga Xush Kelibsiz!*\n\nO'yinlarda yuting, so'm ishlang va ularni olmoslarga almashtiring!"
+    text = "🕵️‍♂️ *Martin Mafia Botiga Xush Kelibsiz!*\n\nO'yinlarda yuting, so'm ishlang, promokodlarni kiriting va ularni olmoslarga almashtiring!"
     kb = [
         [InlineKeyboardButton("➕ Botni guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
         [InlineKeyboardButton("📊 Hisob (Profil)", callback_data="my_account"), InlineKeyboardButton("🛒 Do'kon", callback_data="shop")],
-        [InlineKeyboardButton("🏆 Reyting", callback_data="rank"), InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
+        [InlineKeyboardButton("🎟 Promokod kiritish", callback_data="enter_promo"), InlineKeyboardButton("🏆 Reyting", callback_data="rank")],
+        [InlineKeyboardButton("🙋‍♂️ Olmos so'rash", callback_data="ask")]
     ]
     if user.id == MAIN_ADMIN or user.id in ASSISTANT_ADMINS:
         kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
@@ -62,19 +67,22 @@ async def send_ask_to_admins(user, amount, context):
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
-    text = update.message.text
+    text = update.message.text.strip()
     if u_id in BANNED_USERS or u_id not in ASK_STATE: return
 
+    # 1. Olmos so'rash holati
     if ASK_STATE[u_id] == "waiting_amount" and text.isdigit():
         ASK_STATE.pop(u_id)
         await update.message.reply_text(f"⏳ {text} ta olmos so'rovi yuborildi...")
         await send_ask_to_admins(update.effective_user, int(text), context)
 
+    # 2. Yordamchi admin qo'shish
     elif u_id == MAIN_ADMIN and ASK_STATE[u_id] == "waiting_assistant_id" and text.isdigit():
         ASK_STATE.pop(u_id)
         ASSISTANT_ADMINS.add(int(text))
         await update.message.reply_text(f"✅ ID {text} Yordamchi Admin bo'ldi!")
 
+    # 3. To'g'ridan-to'g'ri olmos berish
     elif ASK_STATE[u_id] == "waiting_give_data":
         try:
             tid, amt = map(int, text.split())
@@ -83,10 +91,46 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("✅ Olmos berildi!")
         except: pass
 
+    # 4. Foydalanuvchini banlash
     elif ASK_STATE[u_id] == "waiting_ban_id" and text.isdigit():
         ASK_STATE.pop(u_id)
         BANNED_USERS.add(int(text))
         await update.message.reply_text("🚫 Bloklandi!")
+
+    # 5. Admin Panel: Promokod yaratish mantiqi (KOD NARX formatida)
+    elif (u_id == MAIN_ADMIN or u_id in ASSISTANT_ADMINS) and ASK_STATE[u_id] == "waiting_promo_create":
+        try:
+            p_code, p_val = text.split()
+            p_code = p_code.upper()
+            p_val = int(p_val)
+            ACTIVE_PROMOCODES[p_code] = p_val
+            ASK_STATE.pop(u_id)
+            await update.message.reply_text(f"✅ *Yangi Promokod Yaratildi!*\n\n🎟 Kod: `{p_code}`\n💎 Beriladigan olmos: *{p_val} ta*", parse_mode="Markdown")
+        except:
+            await update.message.reply_text("❌ Xato format! Iltimos, namuna bo'yicha yozing:\n`OMADLI 50`")
+
+    # 6. Foydalanuvchi promokod kiritganda uni tekshirish mantiqi
+    elif ASK_STATE[u_id] == "waiting_promo_enter":
+        u_promo = text.upper()
+        db = get_user(u_id, update.effective_user.first_name, update.effective_user.username)
+        
+        if u_promo not in ACTIVE_PROMOCODES:
+            await update.message.reply_text("❌ Bunday promokod mavjud emas yoki muddati tugagan!")
+            return
+            
+        if "used_promos" not in db:
+            db["used_promos"] = []
+            
+        if u_promo in db["used_promos"]:
+            await update.message.reply_text("⚠️ Siz bu promokoddan foydalanib bo'lgansiz!")
+            return
+            
+        # Olmosni berish va cheklov qo'shish
+        bonus = ACTIVE_PROMOCODES[u_promo]
+        db["balance"] += bonus
+        db["used_promos"].append(u_promo)
+        ASK_STATE.pop(u_id)
+        await update.message.reply_text(f"🎉 Tabriklaymiz! `{u_promo}` promokodi faollashdi.\nHisobingizga *+{bonus} 💎* qo'shildi!", parse_mode="Markdown")
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -113,8 +157,14 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db["money_uzs"] -= 1000
             db["balance"] += 10
             await query.answer("🎉 +10 Olmos qo'shildi!", show_alert=True)
+            await buttons(update, context)
         else:
             await query.answer("❌ Pul yetarli emas!", show_alert=True)
+
+    # Foydalanuvchiga promokod kiritish oynasi
+    elif query.data == "enter_promo":
+        ASK_STATE[u_id] = "waiting_promo_enter"
+        await query.edit_message_text("🎟 *Sizdagi promokodni yozib yuboring:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
 
     elif query.data == "shop":
         text = "🛍️ *Do'kon:* Mafiya (50 💎), Shifokor (30 💎), Komissar (40 💎), Zirh (70 💎), To'pponcha (100 💎), Kamera (60 💎)"
@@ -131,16 +181,27 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🕵️‍♂️ Martin Mafia Bot menyusi:", reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Guruhga qo'shish", url=f"https://t.me/{context.bot.username}?startgroup=true")],
             [InlineKeyboardButton("📊 Hisob", callback_data="my_account"), InlineKeyboardButton("🛒 Do'kon", callback_data="shop")],
-            [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")] if u_id==MAIN_ADMIN or u_id in ASSISTANT_ADMINS else []
+            [InlineKeyboardButton("🎟 Promokod kiritish", callback_data="enter_promo"), InlineKeyboardButton("🏆 Reyting", callback_data="rank")],
+            [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")] if u_id==MAIN_ADMIN or u_id in ASSISTANT_ADMINS else [InlineKeyboardButton("🏆 Reyting", callback_data="rank")]
         ]))
 
+    # KATTA ADMIN PANEL INTERFEYSI
     elif query.data == "admin_panel":
         if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
-        text = f"👑 *Admin Panel*\n\nO'yinchilar: {len(USER_DATA)} ta"
-        kb = [[InlineKeyboardButton("💰 Olmos Berish", callback_data="adm_give"), InlineKeyboardButton("🚫 Banlash", callback_data="adm_ban")]]
+        text = f"👑 *Admin Panel*\n\nO'yinchilar: {len(USER_DATA)} ta\nFaol promokodlar: {len(ACTIVE_PROMOCODES)} ta"
+        kb = [
+            [InlineKeyboardButton("💰 Olmos Berish", callback_data="adm_give"), InlineKeyboardButton("🚫 Banlash", callback_data="adm_ban")],
+            [InlineKeyboardButton("🎟 Promokod Yaratish", callback_data="adm_create_promo")]
+        ]
         if u_id == MAIN_ADMIN: kb.append([InlineKeyboardButton("➕ Yordamchi Admin", callback_data="adm_add")])
         kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="home")])
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+    # Promokod tugmasi bosilganda
+    elif query.data == "adm_create_promo":
+        if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
+        ASK_STATE[u_id] = "waiting_promo_create"
+        await query.edit_message_text("🎟 *Yaratmoqchi bo'lgan promokodingiz nomi va beradigan olmos miqdorini yozing:*\n\nNamuna: `OMADLI 50`", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]]))
 
     elif query.data == "adm_add": ASK_STATE[u_id] = "waiting_assistant_id"; await query.edit_message_text("ID yuboring:")
     elif query.data == "adm_give": ASK_STATE[u_id] = "waiting_give_data"; await query.edit_message_text("ID va miqdor (Masalan: 12345 50):")
@@ -212,4 +273,4 @@ def main():
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__': main()
-            
+    
