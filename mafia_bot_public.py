@@ -1,3 +1,16 @@
+import os
+import threading
+import http.server
+import socketserver
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=run_dummy_server, daemon=True).start()
+
 #!/usr/bin/env python3.4
 
 ### The Mafia Bot's token is: [REDACTED]
