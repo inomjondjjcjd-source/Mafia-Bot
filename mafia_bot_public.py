@@ -4,7 +4,7 @@ import asyncio
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # Render o'chib qolmasligi uchun veb-server
 server = Flask('')
@@ -17,7 +17,7 @@ def run_server():
 
 # Bot Tokeni va Admin sozlamalari
 TOKEN = "8771036463:AAFtaCJUKZmB7B0fazFKkZ_slVN7eHtHn2A"
-ADMIN_ID = 7920504062  # Sening Telegram ID raqaming (Xabarlar pramoy shu yerga boradi)
+ADMIN_ID = 7920504062  # Sening Telegram ID raqaming
 
 USER_DATA = {}
 GAMES = {}
@@ -117,12 +117,17 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "ask":
         try:
-            # Xabar to'g'ridan-to'g'ri sening shaxsingga (lichkangga) boradi
-            await context.bot.send_message(
-                chat_id=ADMIN_ID, 
-                text=f"🔔 *Olmos So'rovi (Lichkaga)!*\n\n👤 O'yinchi: {query.from_user.first_name}\n🆔 ID: `{u_id}`\n🌐 Username: @{query.from_user.username or 'yoq'}\n\nUshbu foydalanuvchi tekin olmos so'ramoqda!"
+            # Sening lichkangga boradigan xabar formati
+            admin_msg = (
+                f"🔔 *Yangi Olmos So'rovi!*\n\n"
+                f"👤 O'yinchi: {query.from_user.first_name}\n"
+                f"🆔 ID: `{u_id}`\n"
+                f"🌐 Username: @{query.from_user.username or 'yoq'}\n\n"
+                f"💰 *Olmos berish uchun pastdagi buyruqni nusxalab, kerakli miqdorni yozib botga yuboring:* \n\n"
+                f"`/give {u_id} miqdor`"
             )
-            await query.edit_message_text("✅ So'rovingiz to'g'ridan-to'g'ri bosh admin lichkasiga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown")
+            await query.edit_message_text("✅ So'rovingiz bosh admin lichkasiga yuborildi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
         except Exception:
             await query.edit_message_text("⚠️ Xatolik! Botga avval shaxsiy xabar yuborib `/start` bosgan bo'lishingiz kerak.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]))
 
@@ -150,12 +155,35 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             GAMES[g_id]["status"] = "ended"
             await context.bot.send_message(chat_id=g_id, text="🛑 O'yin admin tomonidan majburiy to'xtatildi!")
 
+async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return  # Faqat sen ishlata olasan
+    try:
+        t_id = int(context.args[0])
+        amt = int(context.args[1])
+        
+        # Olmosni foydalanuvchi balansiga qo'shish
+        user_db = get_user(t_id, "O'yinchi", "")
+        user_db["balance"] += amt
+        
+        # Senga tasdiqlash xabari
+        await update.message.reply_text(f"✅ Muvaffaqiyatli! ID `{t_id}` bo'lgan foydalanuvchiga {amt} ta olmos o'tkazildi.")
+        
+        # Olmos so'ragan odamga xabarnoma yuborish
+        try:
+            await context.bot.send_message(
+                chat_id=t_id, 
+                text=f"🎉 *Xushxabar!*\n\nBosh admin so'rovingizni ko'rib chiqdi va hisobingizga *+{amt} 💎* qo'shdi! Hozirgi balansingiz: {user_db['balance']} olmos.",
+                parse_mode="Markdown"
+            )
+        except Exception: pass
+    except Exception:
+        await update.message.reply_text("❌ Xato format! Foydalanish: `/give ID miqdor` (Masalan: `/give 1234567 50`)")
+
 async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g_id = update.effective_chat.id
     if update.effective_chat.type not in ["group", "supergroup"]: return
     
     GAMES[g_id] = {"status": "join", "players": {}}
-    
     kb = [
         [InlineKeyboardButton("➕ O'yinga qo'shilish", callback_data=f"j_{g_id}")],
         [InlineKeyboardButton("▶️ O'yinni boshlash (Admin)", callback_data=f"admin_start_{g_id}")],
@@ -163,13 +191,10 @@ async def game_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     await update.message.reply_text(
-        "🎬 *True Mafia o'yini boshlandi!*\n\n"
-        "🔔 Ro'yxatdan o'tish vaqti: *140 soniya*.\n"
-        "Kamida 4 ta ishtirokchi yig'ilishi shart.", 
+        "🎬 *True Mafia o'yini boshlandi!*\n\n🔔 Ro'yxatdan o'tish vaqti: *140 soniya*.", 
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb)
     )
     
-    # 140 soniya kutish sharti
     await asyncio.sleep(140)
     if g_id in GAMES and GAMES[g_id]["status"] == "join":
         if len(GAMES[g_id]["players"]) < 4:
@@ -198,10 +223,11 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
+    app.add_handler(CommandHandler("give", give_cmd))  # Olmos berish buyrug'i qo'shildi
     app.add_handler(CommandHandler("promokod", promo))
     app.add_handler(CallbackQueryHandler(buttons))
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-        
+                  
