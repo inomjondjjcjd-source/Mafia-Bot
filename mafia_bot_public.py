@@ -62,51 +62,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb.append([InlineKeyboardButton("Admin Panel", callback_data="admin_panel")])
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
-# 🔥 YANGI: Guruh ichida to'g'ridan-to'g'ri ID kiritib olmos berish mantiqi
+# 🔥 AYNIAN SIZ XOHLAGAN MANTIQ: Guruhda forward qilingan xabarga Reply qilib /give yozganda olmos berish
 async def give_cmd_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
     if u_id in BANNED_USERS: return
     if u_id != MAIN_ADMIN and u_id not in ASSISTANT_ADMINS: return
 
     msg = update.message
-    
-    # Buyruq argumentlarini tekshirish (Masalan: /give 7725267767 20)
-    if not context.args or len(context.args) < 1:
-        await msg.reply_text("❌ Xato format! Guruhda olmos berish uchun mana bunday yozing:\n\nBosh admin: `/give ID MIQDOR` (Masalan: `/give 7725267767 20`)\nYordamchi admin: `/give ID` (Masalan: `/give 7725267767`)", parse_mode="Markdown")
+    target_user = None
+
+    # Guruhda biron bir xabarga Reply (javob) berilgan bo'lsa
+    if msg.reply_to_message:
+        # O'sha xabarni guruhga kim forward qilib (uzatib) tashlagan bo'lsa, o'sha odamni oladi!
+        target_user = msg.reply_to_message.from_user
+
+    if not target_user:
+        await msg.reply_text("❌ Olmos berish uchun guruhga forward qilingan (yoki oddiy yozilgan) xabarga Reply (javob) qilib yozing!")
         return
 
-    # Birinchi yozilgan narsa bu har doim maqsadli ID bo'ladi
-    target_id_str = context.args[0]
-    if not target_id_str.isdigit():
-        await msg.reply_text("❌ Xato! Foydalanuvchi ID raqami faqat raqamlardan iborat bo'lishi kerak!")
-        return
-        
-    target_id = int(target_id_str)
-
-    # 1. BOSH ADMIN UCHUN MANTIQ (/give ID MIQDOR)
+    # 1. BOSH ADMIN UCHUN MANTIQ (/give miqdor)
     if u_id == MAIN_ADMIN:
         try:
-            # Agar miqdor ko'rsatilmagan bo'lsa, avtomatik 10 ta beradi
-            amt = int(context.args[1]) if len(context.args) > 1 else 10
-            user_db = get_user(target_id, "O'yinchi", "")
+            amt = int(context.args[0]) if context.args else 10 # Miqdor yozilmasa avtomatik 10 ta
+            user_db = get_user(target_user.id, target_user.first_name, target_user.username)
             user_db["balance"] += amt
-            await msg.reply_text(f"👑 *Bosh Admin mukofoti!*\n\nID: `{target_id}` hisobiga *+{amt} 💎* olmos qo'shildi!\nHozirgi jami olmoslari: {user_db['balance']} ta.", parse_mode="Markdown")
-        except ValueError:
-            await msg.reply_text("❌ Miqdorni to'g'ri raqamda yozing! Namuna: `/give 7725267767 20`", parse_mode="Markdown")
+            await msg.reply_text(f"👑 *Bosh Admin mukofoti!*\n\n👤 {target_user.first_name} (ID: `{target_user.id}`) hisobiga *+{amt} 💎* olmos qo'shildi!\nHozirgi balansi: {user_db['balance']} ta.", parse_mode="Markdown")
+        except:
+            await msg.reply_text("❌ Miqdorni to'g'ri raqamda yozing! Namuna: `/give 10`", parse_mode="Markdown")
 
-    # 2. YORDAMCHI ADMIN UCHUN MANTIQ (/give ID) - sening hisobingdan faqat 5 olmos
+    # 2. YORDAMCHI ADMIN UCHUN MANTIQ
     elif u_id in ASSISTANT_ADMINS:
         current_gifts = ASSISTANT_GIFT_COUNT.get(u_id, 0)
         if current_gifts >= 6:
-            await msg.reply_text("❌ Kechirasiz, siz sening hisobingdan 6 marta sovg'a berish limitidan to'liq foydalanib bo'ldingiz!")
+            await msg.reply_text("❌ Siz 6 marta sovg'a berish limitidan to'liq foydalanib bo'ldingiz!")
             return
         
-        user_db = get_user(target_id, "O'yinchi", "")
+        user_db = get_user(target_user.id, target_user.first_name, target_user.username)
         user_db["balance"] += 5
         ASSISTANT_GIFT_COUNT[u_id] = current_gifts + 1
         
         await msg.reply_text(
-            f"🎁 *Yordamchi Admin sovg'asi!*\n\nID: `{target_id}` hisobiga sening hisobingdan *5 ta olmos* o'tkazildi!\n"
+            f"🎁 *Yordamchi Admin sovg'asi!*\n\n👤 {target_user.first_name} hisobiga sening hisobingdan *5 ta olmos* o'tkazildi!\n"
             f"Sizda qolgan limit: *{6 - ASSISTANT_GIFT_COUNT[u_id]}/6* marta.", parse_mode="Markdown"
         )
 
@@ -121,7 +117,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if u_id in BANNED_USERS or u_id not in ASK_STATE: return
 
-    # Admin paneldagi shaxsiy chat mantiqlari
+    # Admin paneldagi shaxsiy mantiqlar (o'zgarishsiz)
     if ASK_STATE[u_id] == "waiting_amount" and text.isdigit():
         ASK_STATE.pop(u_id)
         await update.message.reply_text(f"Olmos so'rovi yuborildi...")
@@ -181,7 +177,7 @@ def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("game", game_cmd))
-    app.add_handler(CommandHandler("give", give_cmd_handler)) # Rasmiy buyruq handler
+    app.add_handler(CommandHandler("give", give_cmd_handler)) 
     app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.run_polling(drop_pending_updates=True)
