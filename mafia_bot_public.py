@@ -3,7 +3,7 @@ import sys
 import subprocess
 import time
 
-# SIZNING ASOSIY KUTUBXONANGIZ (PYTHON-TELEGRAM-BOT V21+)
+# KUTUBXONALARNI TEKSHIRISH VA O'RNATISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -15,20 +15,20 @@ except ImportError:
 from threading import Thread
 from flask import Flask
 
-# SERVER PORTINI SOZLASH (RENDER UCHUN)
+# RENDER UCHUN VEB-SERVER
 server = Flask('')
 @server.route('/')
-def home(): return "Bot To'liq Rejimda Aktiv!"
+def home(): return "Bot Yangi Token Bilan Aktiv!"
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY PARAMETRLAR
-TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
+# 🔑 YANGI TOKEN VA ADMIN ID (SOZLAMALAR REJIMIDAGI)
+TOKEN = "8930327976:AAE3sgNPEJRoZROhACHK7M4s-THpmWvNym8"
 MAIN_ADMIN = 7920504062
 
-# FOYDALANUVCHILAR BAZASI
+# MA'LUMOTLAR BAZASI XOTIRASI
 USER_DATA = {}
 
 def get_user_data(user_id):
@@ -45,7 +45,7 @@ def get_user_data(user_id):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# 🎰 SIZ AYTGAN ASOSIY KATTA MENYU (HAMMA TUGMALAR SHU YERDA)
+# 🎰 HAMMA ASOSIY KATTA TUGMALAR (AYTGANINGIZDEK ASLI HOLIDA)
 def get_main_menu_keyboard(user_id):
     keyboard = [
         [
@@ -69,7 +69,7 @@ def get_main_menu_keyboard(user_id):
         keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
     return InlineKeyboardMarkup(keyboard)
 
-# /START BUYRUG'I
+# /START COMMANDASI
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = get_user_data(user_id)
@@ -81,7 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-# TUGMALAR BOSILGANDA ISHLAYDIGAN TIZIM
+# CALLBACK HANDLER (TUGMALAR BOSILGANDA)
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -121,7 +121,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gift = random.randint(1000, 3000)
             ud["money"] += gift
             ud["last_bonus_time"] = now
-            await query.edit_message_text(f"🎁 Senga *+{gift:,} so'm* 2 soatlik bonus berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
+            await query.edit_message_text(f"🎁 Senga *+{gift:,} so'm* bonus berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
     elif query.data == "withdraw_money":
         if ud["money"] < 5000:
@@ -147,7 +147,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data in ["earn_money", "deposit_money", "earn_fast"]:
         await query.edit_message_text("⏳ Bu bo'lim hozircha sozlanmoqda, tez kunda aktivlashadi!", reply_markup=back_keyboard)
 
-# MATNLI XABARLAR VA ADMIN BUYRUQLARI
+# MATNLI XABARLAR VA O'YIN TIZIMI
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
@@ -155,14 +155,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
-    # KARTA MA'LUMOTLARINI YIG'ISH FUNKSIYASI
+    # KARTA RAQAMINI SAQLASH
     if ud["state"] == "wait_card_info":
         ud["card_number"] = text
         ud["state"] = None
         await update.message.reply_text("✅ *Arizangiz qabul qilindi!* Tez orada adminlar hisobingizga pulni o'tkazib berishadi.", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # ADMIN PANEL BUYRUQLARI
+    # ADMIN PANEL INTEGRATSIYASI
     if user_id == MAIN_ADMIN and ud["state"] == "wait_admin_cmd":
         try:
             if "+" in text:
@@ -182,10 +182,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Xato! Namuna: `7920504062 +10` yoki `7920504062 5000`", reply_markup=back_keyboard)
         return
 
-    # O'YIN TIKISH TIZIMI
+    # TIKISH VA O'YINLAR MANTIQI
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
         import re
+        import random
         clean_text = re.sub(r'[.,\s]', '', text)
         if not clean_text.isdigit():
             await update.message.reply_text("❌ Xato! Faqat toza raqam kiriting.")
@@ -203,7 +204,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["money"] -= bet
         ud["state"] = None
 
-        # 🎮 DON-DON-ZIKI O'YINI
+        # DON-DON-ZIKI
         if gmode == "ddz":
             if random.random() < 0.4:
                 ud["money"] += (bet * 2)
@@ -211,7 +212,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(f"🎮 *Don-Don-Ziki*\n\n📉 Afsuski yutqazdingiz! Hisobingizdan *-{bet:,} so'm* ketdi.", parse_mode="Markdown", reply_markup=back_keyboard)
         
-        # 🎯 DART O'YINI
+        # DART
         else:
             u_s = random.randint(1, 6)
             b_s = random.randint(1, 6)
@@ -229,19 +230,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     Thread(target=run_server).start()
     
-    # WEBHOOK TOZALASH TIZIMI
+    # ⚡️ YANGI TOKEN BILAN WEBHOOK PARAZITLARINI TOZALASH
     app = Application.builder().token(TOKEN).build()
     app.bot.delete_webhook(drop_pending_updates=True)
     time.sleep(1)
     
-    # HANDLERLARNI RO'YXATDAN O'TKAZISH
+    # HANDLERLAR
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot barcha tugmalari bilan to'liq ishga tushdi...")
+    print("Bot yangi token bilan muvaffaqiyatli ishga tushdi...")
     app.run_polling()
 
 if __name__ == '__main__':
     main()
-        
+                
