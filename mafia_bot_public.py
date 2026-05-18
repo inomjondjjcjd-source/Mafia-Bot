@@ -12,8 +12,8 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY SOZLAMALAR
-TOKEN = "8443418214:AAFS-UDGKW_ug68bShTIbQe0oA3VnjQYxL0"
+# ASOSIY SOZLAMALAR (YANGI TOKEN BILAN)
+TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062  
 TARGET_GROUP = "@yzbedkslls" 
 
@@ -45,11 +45,10 @@ def get_user(user_id, name):
             "games_lost": 0,        
             "group_bonus_received": False,
             "last_bonus_time": 0,
-            # Pul qidirmoq bo'limi uchun ma'lumotlar
             "last_quiz_time": 0,
             "current_q_index": 0,
             "quiz_correct_answers": 0,
-            "bonus_questions": 0 # Admin qo'shib beradigan savollar
+            "bonus_questions": 0
         }
     if user_id == MAIN_ADMIN:
         USER_DATA[user_id]["money"] = 999999999 
@@ -132,27 +131,23 @@ async def buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(cabinet_text, parse_mode="Markdown", reply_markup=back_kb)
 
-    # 🔍 PUL QIDIRMOQ (MAKTAB SAVOLLARI TIZIMI)
     elif query.data == "quiz_start":
         current_time = time.time()
         time_passed = current_time - db["last_quiz_time"]
 
-        # 5 soatlik cheklovni tekshirish (Agar admin bonus savol bermagan bo'lsa)
-        if time_passed < 18000 and db["bonus_questions"] <= 0:  # 5 soat = 18000 sekund
+        if time_passed < 18000 and db["bonus_questions"] <= 0:  
             remaining_minutes = int((18000 - time_passed) // 60)
-            await query.edit_message_text(f"⏱ *Savollar tugagan!*\n\nMiyangiz dam olmoqda. Yangi savollar ochilishi uchun yana *{remaining_minutes} daqiqa* kutishingiz kerak!", parse_mode="Markdown", reply_markup=back_kb)
+            await query.edit_message_text(f"⏱ *Savollar tugagan!*\n\nYangi savollar ochilishi uchun yana *{remaining_minutes} daqiqa* kutishingiz kerak!", parse_mode="Markdown", reply_markup=back_kb)
             return
 
         db["current_q_index"] = 0
         db["quiz_correct_answers"] = 0
         
-        # Birinchi savolni chiqarish
         q_data = SCHOOL_QUESTIONS[0]
         text = f"🔍 *Pul qidirmoq bo'limi (1/9-Savol):*\n\n🤔 Savol: *{q_data['q']}*\n\nTo'g'ri javobga *900 so'm* beriladi!"
         kb = [[InlineKeyboardButton(opt, callback_data=f"quiz_ans_0_{i}")] for i, opt in enumerate(q_data["o"])]
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-    # SAVOLLARNING JAVOBLARINI TEKSHIRISH
     elif query.data.startswith("quiz_ans_"):
         parts = query.data.split("_")
         q_idx = int(parts[2])
@@ -171,16 +166,14 @@ async def buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         next_idx = q_idx + 1
 
         if next_idx < 9:
-            # Keyingi savolga o'tish
             next_q = SCHOOL_QUESTIONS[next_idx]
             text = res_text + f"🔍 *{next_idx+1}/9-Savol:*\n\n🤔 Savol: *{next_q['q']}*"
             kb = [[InlineKeyboardButton(opt, callback_data=f"quiz_ans_{next_idx}_{i}")] for i, opt in enumerate(next_q["o"])]
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         else:
-            # O'yin tugadi, 5 soatlik taymerni yoqamiz
             db["last_quiz_time"] = time.time()
             if db["bonus_questions"] > 0:
-                db["bonus_questions"] -= 1 # Qo'shimcha imkoniyat sarflandi
+                db["bonus_questions"] -= 1 
 
             total_earned = db["quiz_correct_answers"] * 900
             end_text = (
@@ -343,14 +336,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=update.effective_chat.id, text=text_res, parse_mode="Markdown", reply_markup=back_kb)
         except: await update.message.reply_text("❌ Xato!")
 
-    # 👑 ADMIN PANEL LOGIKASI (+10 SAVOL QO'SHISH SHARTI)
     elif u_id == MAIN_ADMIN and ADMIN_STATE.get(u_id) == "waiting":
         try:
             if "+10" in text:
                 target_id = int(text.split()[0])
                 user_db = get_user(target_id, "O'yinchi")
-                user_db["last_quiz_time"] = 0  # Taymerni nolga tushiramiz
-                user_db["bonus_questions"] += 1 # Qo'shimcha imkoniyat beramiz
+                user_db["last_quiz_time"] = 0  
+                user_db["bonus_questions"] += 1 
                 ADMIN_STATE.pop(u_id, None)
                 await update.message.reply_text(f"✅ Xizmat muvaffaqiyatli! Foydalanuvchi `{target_id}` ga qo'shimcha 10 ta maktab savoli qo'shib berildi!", parse_mode="Markdown")
             else:
