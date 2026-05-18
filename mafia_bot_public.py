@@ -3,9 +3,11 @@ import sys
 import subprocess
 import json
 import random
+import asyncio
 from flask import Flask
 from threading import Thread
 
+# Kerakli kutubxonalarni tekshirish va o'rnatish
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -92,7 +94,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif q.data == "u_withdraw":
         await q.edit_message_text(f"💳 *PUL YECHISH*\n\nMinimal: {DB['settings']['min_withdraw']} so'm\nID: `{uid}`\nYechish uchun admin lichkasiga yozing uka!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👑 Admin Lichka", url="https://t.me/shox_admin")], [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
     
-    # 🎰 SLOT (777) O'YINI (YANGI QO'SHILDI 🔥)
+    # 🎰 SLOT (777) O'YINI
     elif q.data == "g_slot":
         if ud["balance"] < 3000:
             await q.edit_message_text("❌ Slot o'ynash uchun kamida 3000 so'm kerak!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
@@ -245,7 +247,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cm = 1.0
         while cm < cp:
             await q.edit_message_text(f"✈️ *AVIATOR* \n\n🚀 Koeffitsiyent: *x{cm}*\n💰 Yutuq: {int(2000*cm)} so'm", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"🛑 CASHOUT (x{cm})", callback_data="av_cashout")]]))
-            import asyncio
             await asyncio.sleep(1)
             cm = round(cm + random.uniform(0.2, 0.5), 2)
             ud = check_user(uid)
@@ -326,7 +327,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_db()
         await update.message.reply_text(f"🎁 Promokod! +{v} so'm qo'shildi!")
         return
-    await update.message.reply_text("🤖 O'nsh uchun /start bosing!")
+    await update.message.reply_text("🤖 O'yin o'ynash uchun /start bosing!")
 
 async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -348,6 +349,7 @@ async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📉 Ayrildi!")
     except: pass
 
+# --- RENDER ASYNCIO VA FLASK STABILIZATORI ---
 app = Flask(__name__)
 @app.route('/')
 def home(): 
@@ -356,10 +358,13 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
-if __name__ == '__main__':
+async def main():
     load_db()
+    
+    # Veb serverni alohida fonda boshlaymiz
     Thread(target=run_flask, daemon=True).start()
     
+    # Bot dasturini quramiz
     bot_app = Application.builder().token(TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("plus", admin_plus))
@@ -367,6 +372,26 @@ if __name__ == '__main__':
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     
-    print("Bot daxshatli va to'liq rejimda muvaffaqiyatli boshlandi...")
-    bot_app.run_polling(drop_pending_updates=True)
-                                                                 
+    # Pollingni asyncio loop ichida to'g'ri ishga tushirish (Render xatolik bermasligi uchun)
+    async with bot_app:
+        await bot_app.initialize()
+        await bot_app.start()
+        print("Bot daxshatli va to'liq rejimda muvaffaqiyatli boshlandi...")
+        await bot_app.updater.start_polling(drop_pending_updates=True)
+        # Bot doimiy ishlab turishi uchun cheksiz kutish rejimiga o'tkazamiz
+        while True:
+            await asyncio.sleep(3600)
+
+if __name__ == '__main__':
+    try:
+        # Mavjud asyncio loopni tekshirish yoki yangi ochish
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Agar loop fonda ishlayotgan bo'olsa, task qo'shamiz
+            loop.create_task(main())
+        else:
+            loop.run_until_complete(main())
+    except RuntimeError:
+        # Loop umuman bo'lmasa, silliqqina run qilamiz
+        asyncio.run(main())
+    
