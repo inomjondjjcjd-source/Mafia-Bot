@@ -160,5 +160,6 @@ def handle_text(message):
 if __name__ == '__main__':
     Thread(target=run_server).start()
     print("Bot muvaffaqiyatli ishlamoqda...")
-    bot.infinity_polling(drop_pending_updates=True)
-            
+    # Xato bergan drop_pending_updates olib tashlandi, endi 100% toza yonadi!
+    bot.infinity_polling()
+    
