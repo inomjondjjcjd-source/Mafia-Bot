@@ -2,34 +2,30 @@ import os
 import sys
 import subprocess
 import json
-import random
-import urllib.parse
-from threading import Thread
 
 # 📦 KERAKLI KUTUBXONALARNI AVTO-O'RNATISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1"])
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# 🔑 SIZNING ANIQ SOZLAMALARINGIZ (MUTLOQ TO'G'RI VARIANTI)
+# 🔑 ASOSIY SOZLAMALAR
 TOKEN = "8829005476:AAGc-b-dQ1NJycS3vMf0-tRn7H15y4kFtn4"
-ADMIN_ID = 1000065923  # 👑 Sizning haqiqiy shaxsiy Telegram ID'ngiz (Bot o'ziga o'zi admin bo'lmasligi uchun to'g'rilandi!)
-DATA_FILE = "ai_bot_db.json"
+ADMIN_ID = 1000065923  # 👑 Sizning shaxsiy Telegram ID'ngiz (Siz bu yerda Shoxsiz!)
+DATA_FILE = "reaction_bot_db.json"
 
-# 📊 MA'LUMOTLAR BAZASI
+# 📊 MA'LUMOTLAR BAZASI INTERFEYSI
 DB = {
-    "users": {},       # Foydalanuvchilar balansi va ma'lumotlari
+    "users": {},       # Foydalanuvchi balanslari va kanallari
     "promocodes": {},  # Yaratilgan promokodlar
     "settings": {
-        "pic_price": 600  # 💰 Har bir rasm narxi: 600 so'm
+        "service_price": 500  # 💰 Bitta kanal qo'shish narxi: 500 so'm
     }
 }
 
-# 💾 BAZANI YUKLASH VA SAQLASH
 def load_db():
     global DB
     if os.path.exists(DATA_FILE):
@@ -52,118 +48,121 @@ def check_user(user_id, name="Foydalanuvchi"):
     if user_id not in DB["users"]:
         DB["users"][user_id] = {
             "name": name,
-            "balance": 0,  # Yangi foydalanuvchilar balansi
-            "total_pics": 0
+            "balance": 100,  # Skrinshotingizdagidek yangi kirgandagi bonus: 100 so'm
+            "channels": [],
+            "limit": 0,
+            "tarif": "Bepul"
         }
         save_db()
     return DB["users"][user_id]
 
-# 👋 START BUYRUG'I
+# 👋 START BUYRUG'I (ASOSIY STRUKTURA)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name
-    ud = check_user(user_id, name)
-    
-    price = DB["settings"]["pic_price"]
+    check_user(user_id, name)
     
     txt = (
-        f"👋 *Salom, {name}!*\n\n"
-        f"🎨 Men daxshatli AI rasm chizadigan botman!\n"
-        f"🖼 Har bir rasm chizish narxi: *{price} so'm*\n"
-        f"💰 Sening balansing: *{ud['balance']} so'm*\n\n"
-        f"👇 Rasm chizish uchun ingliz tilida biror narsa yozib yubor (Masalan: `cyberpunk wolf` yoki `neon car`)."
+        f"📣 *@ReaksiyauzBot — Kanal va Guruhlarga Reaksiya qo'shish boti!*\n\n"
+        f"✨ Endi siz ham o'z kanal yoki guruhingizdagi postlarga qulay va chiroyli Reaksiyalar qo'shishingiz mumkin.\n"
+        f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
     )
     
-    buttons = [[InlineKeyboardButton("👤 Profil", callback_data="my_profile")]]
+    # Skrinshotingizdagi pastki tugmalar strukturasi
+    buttons = [
+        [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
+        [InlineKeyboardButton("💰 Hisobni ko'rish", callback_data="view_balance"), InlineKeyboardButton("🛍 Yangi xizmatlar", callback_data="new_services")],
+        [InlineKeyboardButton("📖 Bot qo'llanmasi", callback_data="bot_guide"), InlineKeyboardButton("⭐ Sovg'alar olish", callback_data="get_gifts")]
+    ]
     if user_id == ADMIN_ID:
-        buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_main")])
+        buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_panel")])
         
     await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-# 👤 PROFIL VA MENYU BOSHQARUVI
-async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 🎛 TUGMALAR BOSILGANDAGI KODLAR
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     ud = check_user(user_id)
     
-    if query.data == "my_profile":
+    # 1. REAKSIYALAR SOZLAMALARI MENYUSI
+    if query.data == "reaction_settings":
         txt = (
-            f"👤 *Sening profilingiz:*\n\n"
-            f"💵 Balans: *{ud['balance']} so'm*\n"
-            f"🖼 Jami chizgan rasmlaring: *{ud['total_pics']} ta*\n\n"
-            f"💡 Balansni to'ldirish yoki promokod ishlatish uchun adminga murojaat qing."
+            f"📣 *Reaksiyalarni ishlatish uchun avval botni kanal yoki guruhga qo'shishingiz kerak.*\n\n"
+            f"👉 Quyidagi tugmalardan foydalanib, kerakli reaksiyalarni tanlang yoki ko'rish uchun bosing."
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_start")]])
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=kb)
+        kb = [
+            [InlineKeyboardButton("➕ Kanal qo'shish", callback_data="add_channel"), InlineKeyboardButton("🗑 Kanal o'chirish", callback_data="del_channel")],
+            [InlineKeyboardButton("📄 Kanallar ro'yxati", callback_data="list_channels")],
+            [InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")]
+        ]
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         
-    elif query.data == "back_to_start":
-        price = DB["settings"]["pic_price"]
+    # 2. HISOBNI KO'RISH MENYUSI
+    elif query.data == "view_balance":
         txt = (
-            f"🎨 Sun'iy Intellekt rasm chizish boti!\n"
-            f"🖼 Rasm narxi: *{price} so'm*\n"
-            f"💰 Sening balansing: *{ud['balance']} so'm*\n\n"
-            f"Rasm chizish uchun matn yuboring."
+            f"💳 *Hisobingiz haqida:*\n\n"
+            f"🆔 *ID:* `{user_id}`\n"
+            f"💰 *Balans:* {ud['balance']} so'm\n"
+            f"⏰ *Limit:* {ud['limit']}\n"
+            f"💎 *Tarif:* {ud['tarif']}\n\n"
+            f"⭐️ *Premium obunga qo'shiling!*"
         )
-        buttons = [[InlineKeyboardButton("👤 Profil", callback_data="my_profile")]]
+        kb = [
+            [InlineKeyboardButton("💰 Hisob to'ldirish", callback_data="refill_balance")],
+            [InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")]
+        ]
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        
+    # 3. BOSH MENYUGA QAYTISH
+    elif query.data == "back_main":
+        txt = (
+            f"📣 *@ReaksiyauzBot — Kanal va Guruhlarga Reaksiya qo'shish boti!*\n\n"
+            f"✨ Endi siz ham o'z kanal yoki guruhingizdagi postlarga qulay va chiroyli Reaksiyalar qo'shishingiz mumkin.\n"
+            f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
+        )
+        buttons = [
+            [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
+            [InlineKeyboardButton("💰 Hisobni ko'rish", callback_data="view_balance"), InlineKeyboardButton("🛍 Yangi xizmatlar", callback_data="new_services")],
+            [InlineKeyboardButton("📖 Bot qo'llanmasi", callback_data="bot_guide"), InlineKeyboardButton("⭐ Sovg'alar olish", callback_data="get_gifts")]
+        ]
         if user_id == ADMIN_ID:
-            buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_main")])
+            buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_panel")])
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-    elif query.data == "admin_main" and user_id == ADMIN_ID:
-        total_users = len(DB["users"])
-        current_price = DB["settings"]["pic_price"]
+    # 4. KANALLAR RO'YXATI
+    elif query.data == "list_channels":
+        ch_list = ud["channels"]
+        if not ch_list:
+            txt = "❌ Siz hali birorta ham kanal ulamagansiz uka."
+        else:
+            txt = "📋 *Sizning ulangan kanallaringiz:*\n\n" + "\n".join([f"🔹 {ch}" for ch in ch_list])
+        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="reaction_settings")]]
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+    # 👑 SHOX (ADMIN) PANEL INTERFEYSI
+    elif query.data == "admin_panel" and user_id == ADMIN_ID:
         txt = (
-            f"👑 *SHOX PANELI (ADMIN)*\n\n"
-            f"👥 Jami foydalanuvchilar: *{total_users} ta*\n"
-            f"💰 Hozirgi rasm narxi: *{current_price} so'm*\n\n"
-            f"Boshqarish buyruqlari:\n"
-            f"🔹 `/plus ID PUL` - Pul solish\n"
-            f"🔹 `/minus ID PUL` - Pulni ayirish\n"
-            f"🔹 `/promo KOD SUMMA` - Promokod yaratish\n"
-            f"🔹 `/setprice NARX` - Rasm narxini o'zgartirish"
+            f"👑 *REAKSIYA BOT - SHOX PANELI*\n\n"
+            f"👥 Jami a'zolar: *{len(DB['users'])} ta*\n"
+            f"💰 Xizmat narxi: *{DB['settings']['service_price']} so'm*\n\n"
+            f"Admin buyruqlari:\n"
+            f"🔹 `/plus ID PUL` - Istalgan odamga pul solish\n"
+            f"🔹 `/minus ID PUL` - Balansdan pul ayirish\n"
+            f"🔹 `/promo KOD SUMMA` - Yangi promokod yaratish\n"
+            f"🔹 `/setprice NARX` - Xizmat narxini o'zgartirish"
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="back_to_start")]])
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=kb)
+        kb = [[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="back_main")]]
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-# 🎨 AI RASM CHIZISH MEXANIZMI
-async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    text = update.message.text
-    
-    if text.startswith('/'):
-        return
+    # TEZ ORADA ISHLAYDIGAN TUGMALAR UCHUN SHABLON
+    elif query.data in ["add_channel", "del_channel", "new_services", "bot_guide", "get_gifts", "refill_balance"]:
+        txt = f"⚙️ Bu bo'lim loyihaning keyingi bosqichida to'liq ishga tushadi uka! Hozircha balans va struktura daxshat ishlamoqda."
+        kb = [[InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")] ]
+        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
-    ud = check_user(user_id, update.effective_user.first_name)
-    price = DB["settings"]["pic_price"]
-    
-    if ud["balance"] < price and user_id != ADMIN_ID:
-        await update.message.reply_text(f"❌ Balansingizda yetarli pul yo'q! Rasm chizish {price} so'm. Hozirgi balansingiz: {ud['balance']} so'm.")
-        return
-    
-    msg = await update.message.reply_text("⏳ *Ajdaho o'ylamoqda... Rasm chizilmoqda...* 🐉", parse_mode="Markdown")
-    
-    try:
-        prompt_encoded = urllib.parse.quote(text)
-        seed = random.randint(1, 999999)
-        image_url = f"https://image.pollinations.ai/p/{prompt_encoded}?width=1024&height=1024&seed={seed}&nologo=true"
-        
-        if user_id != ADMIN_ID:
-            ud["balance"] -= price
-            ud["total_pics"] += 1
-            save_db()
-            
-        await update.message.reply_photo(
-            photo=image_url, 
-            caption=f"🖼 *Sizning rasmingiz tayyor!*\n✍️ Prompt: `{text}`\n💰 Yechildi: {price if user_id != ADMIN_ID else 0} so'm\n💳 Qolgan balans: {ud['balance']} so'm",
-            parse_mode="Markdown"
-        )
-        await msg.delete()
-        
-    except Exception as e:
-        await msg.edit_text(f"❌ Rasm chizishda xatolik bo'ldi. Qaytadan urinib ko'ring.")
-
-# 👑 ADMIN BUYRUQLARI
+# 👑 ADMIN BUYRUQLARI MEXANIZMI
 async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
@@ -172,14 +171,10 @@ async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if target_id in DB["users"]:
             DB["users"][target_id]["balance"] += amount
             save_db()
-            await update.message.reply_text(f"✅ Foydalanuvchi `{target_id}` balansiga *{amount} so'm* qo'shildi!", parse_mode="Markdown")
-            try:
-                await context.bot.send_message(target_id, f"💰 Balansingiz admin tomonidan *{amount} so'm*ga to'ldirildi!")
-            except: pass
+            await update.message.reply_text(f"✅ `ID: {target_id}` balansiga *{amount} so'm* qo'shildi!")
         else:
-            await update.message.reply_text("❌ Bunday foydalanuvchi topilmadi.")
-    except:
-        await update.message.reply_text("❌ To'g'ri yozish: `/plus ID PUL`")
+            await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
+    except: await update.message.reply_text("Format: `/plus ID PUL`")
 
 async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -188,23 +183,18 @@ async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = int(context.args[1])
         if target_id in DB["users"]:
             DB["users"][target_id]["balance"] -= amount
-            if DB["users"][target_id]["balance"] < 0: DB["users"][target_id]["balance"] = 0
             save_db()
-            await update.message.reply_text(f"✅ Foydalanuvchi `{target_id}` balansidan *{amount} so'm* ayrildi!", parse_mode="Markdown")
-        else:
-            await update.message.reply_text("❌ Bunday foydalanuvchi topilmadi.")
-    except:
-        await update.message.reply_text("❌ To'g'ri yozish: `/minus ID PUL`")
+            await update.message.reply_text(f"✅ `ID: {target_id}` balansidan *{amount} so'm* ayrildi!")
+    except: await update.message.reply_text("Format: `/minus ID PUL`")
 
 async def admin_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        new_price = int(context.args[0])
-        DB["settings"]["pic_price"] = new_price
+        price = int(context.args[0])
+        DB["settings"]["service_price"] = price
         save_db()
-        await update.message.reply_text(f"✅ Rasm chizish narxi yangilandi: *{new_price} so'm*", parse_mode="Markdown")
-    except:
-        await update.message.reply_text("❌ To'g'ri yozish: `/setprice NARX`")
+        await update.message.reply_text(f"✅ Yangi xizmat narxi saqlandi: *{price} so'm*")
+    except: await update.message.reply_text("Format: `/setprice NARX`")
 
 async def admin_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -213,31 +203,10 @@ async def admin_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = int(context.args[1])
         DB["promocodes"][code] = {"amount": amount, "used_by": []}
         save_db()
-        await update.message.reply_text(f"🎁 Yangi promokod yaratildi:\n🔑 Kod: `{code}`\n💵 Qiymati: *{amount} so'm*", parse_mode="Markdown")
-    except:
-        await update.message.reply_text("❌ To'g'ri yozish: `/promo KOD SUMMA`")
+        await update.message.reply_text(f"🎁 Promokod yaratildi: `{code}` ({amount} so'm)")
+    except: await update.message.reply_text("Format: `/promo KOD SUMMA`")
 
-async def use_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    try:
-        code = context.args[0].upper()
-        ud = check_user(user_id)
-        
-        if code in DB["promocodes"]:
-            promo = DB["promocodes"][code]
-            if user_id in promo["used_by"]:
-                await update.message.reply_text("❌ Siz bu promokoddan foydalanib bo'lgansiz!")
-            else:
-                promo["used_by"].append(user_id)
-                ud["balance"] += promo["amount"]
-                save_db()
-                await update.message.reply_text(f"🎉 Tabriklayman! `{code}` promokodi faollashdi. Hisobingizga *{promo['amount']} so'm* qo'shildi!", parse_mode="Markdown")
-        else:
-            await update.message.reply_text("❌ Bunday promokod mavjud emas.")
-    except:
-        await update.message.reply_text("❌ Promokod ishlatish uchun: `/coupon KOD` deb yozing.")
-
-# 🚀 ASOSIY SECTION
+# 🚀 BOTNI RUN QILISH
 def main():
     load_db()
     bot_app = Application.builder().token(TOKEN).build()
@@ -247,12 +216,11 @@ def main():
     bot_app.add_handler(CommandHandler("minus", admin_minus))
     bot_app.add_handler(CommandHandler("setprice", admin_setprice))
     bot_app.add_handler(CommandHandler("promo", admin_promo))
-    bot_app.add_handler(CommandHandler("coupon", use_coupon))
-    bot_app.add_handler(CallbackQueryHandler(menu_callback))
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_image))
+    bot_app.add_handler(CallbackQueryHandler(callback_handler))
     
-    print("AI Rasm chizuvchi SHOX bot muvaffaqiyatli ishga tushdi...")
+    print("Reaksiyalar Boti daxshatli tarzda ishga tushdi...")
     bot_app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
+    1000065923
