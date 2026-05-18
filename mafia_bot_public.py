@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import time
 
 # RENDER KESHINI CHETLAB O'TISH UCHUN AVTOMATIK KUTUBXONA O'RNATUVCHI
 try:
@@ -12,7 +13,6 @@ except ImportError:
 
 import random
 import re
-import time
 from threading import Thread
 from flask import Flask
 from telebot import types
@@ -26,7 +26,7 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY PARAMETRLAR
+# ASOSIY PARAMETRLAR (SIZ AYTGANDEK HECH NIMA O'ZGARMADI)
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062  
 
@@ -44,6 +44,7 @@ def get_user(user_id):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
+# ASOSIY KLAVIATURA
 def main_markup(user_id):
     markup = types.InlineKeyboardMarkup(row_width=2)
     btn1 = types.InlineKeyboardButton("🎮 Don-Don-Ziki", callback_data="game_ddz")
@@ -92,7 +93,7 @@ def callback_inline(call):
 
     elif call.data == "game_admin" and u_id == MAIN_ADMIN:
         db["state"] = "wait_admin"
-        bot.edit_message_text("👑 *Admin Panel*\n\nPul berish formati: `ID MIQDOR`", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
+        bot.edit_message_text("👑 *Admin Panel*\n\n📌 *Pul berish:* ID Miqdori (Masalan: `7920504062 5000`)", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
 
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
@@ -102,6 +103,7 @@ def handle_text(message):
     back_markup = types.InlineKeyboardMarkup()
     back_markup.add(types.InlineKeyboardButton("⬅️ Menyu", callback_data="game_home"))
 
+    # ADMIN PANEL INTEGRATSIYASI (FORMAT SAQLANDI)
     if u_id == MAIN_ADMIN and db["state"] == "wait_admin":
         try:
             t_id, amt = map(int, text.split())
@@ -113,6 +115,7 @@ def handle_text(message):
             bot.send_message(message.chat.id, "❌ Xato! Namuna: `7920504062 10000`", reply_markup=back_markup)
         return
 
+    # O'YIN TIKISH TIZIMI (NUQTA VA VERGULLAR TOZALANADI, XATO BERMAYDI)
     if db["state"].startswith("wait_bet_"):
         g_mode = db["state"].split("_")[2]
         clean_text = re.sub(r'[.,\s]', '', text)
@@ -134,6 +137,7 @@ def handle_text(message):
             db["money"] -= bet
         db["state"] = "none"
 
+        # DON-DON-ZIKI MANTIQI
         if g_mode == "ddz":
             win = random.random() < 0.30 if bet > 4000 else random.random() < 0.45
             if win:
@@ -142,6 +146,7 @@ def handle_text(message):
             else:
                 bot.send_message(message.chat.id, f"🎮 *Don-Don-Ziki*\n\n✌️ Siz: Qaychi\n✊ Bot: Tosh\n\n📉 *Yutqazdingiz!* -{bet:,} so'm", parse_mode="Markdown", reply_markup=back_markup)
 
+        # DART MANTIQI
         elif g_mode == "dart":
             u_score = random.randint(1, 6)
             b_score = random.randint(u_score + 1, 6) if (bet > 4000 or random.random() < 0.6) and u_score < 6 else random.randint(1, 6)
@@ -158,8 +163,14 @@ def handle_text(message):
             bot.send_message(message.chat.id, res, parse_mode="Markdown", reply_markup=back_markup)
 
 if __name__ == '__main__':
+    # SERVERNI ALOHIDA POTOKDA ISHGA TUSHIRISH
     Thread(target=run_server).start()
-    print("Bot muvaffaqiyatli ishlamoqda...")
-    # Xato bergan drop_pending_updates olib tashlandi, endi 100% toza yonadi!
+    
+    # ⚠️ CRITICAL FIXED: TIQILIB QOLGAN WEBHOOK PARZITINI O'CHIRISH
+    print("Eski tiqilib qolgan webhook majburlab o'chirilmoqda...")
+    bot.remove_webhook()
+    time.sleep(1) # Telegram serverlari yangilanishi uchun kichik kutish
+    
+    print("Bot 100% toza va mukammal holatda ishga tushdi!")
     bot.infinity_polling()
     
