@@ -1,31 +1,39 @@
 import os
+import sys
+import subprocess
+
+# RENDER KESHINI CHETLAB O'TISH UCHUN AVTOMATIK KUTUBXONA O'RNATUVCHI
+try:
+    import telebot
+except ImportError:
+    print("Telebot topilmadi. Majburiy o'rnatilmoqda...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyTelegramBotAPI", "Flask"])
+    import telebot
+
 import random
 import re
 import time
 from threading import Thread
 from flask import Flask
-import telebot
 from telebot import types
 
-# RENDER UXLAB QOLMASLIGI UCHUN SODDA SERVER
+# SERVERNI SOZLASH
 server = Flask('')
 @server.route('/')
-def home(): return "Bot Uchib Ishlamoqda!"
+def home(): return "Bot 100% Aktiv va Tezkor!"
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY SOZLAMALAR
+# ASOSIY PARAMETRLAR
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062  
 
 bot = telebot.TeleBot(TOKEN)
-
-# CHAQMOQ TEZLIGIDA ISHLAYDIGAN XOTIRA (DATABASE SECIN ISHLAGANI UCHUN OLIB TASHLANDI)
 USER_DATA = {}
 
-def get_user(user_id, name="O'yinchi"):
+def get_user(user_id):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "money": 999999999 if user_id == MAIN_ADMIN else 6000,
@@ -36,7 +44,6 @@ def get_user(user_id, name="O'yinchi"):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# ASOSIY KLAVIATURA
 def main_markup(user_id):
     markup = types.InlineKeyboardMarkup(row_width=2)
     btn1 = types.InlineKeyboardButton("🎮 Don-Don-Ziki", callback_data="game_ddz")
@@ -47,21 +54,18 @@ def main_markup(user_id):
         markup.add(types.InlineKeyboardButton("👑 Admin Panel", callback_data="game_admin"))
     return markup
 
-# /START BUYRUG'I
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     u_id = message.from_user.id
-    db = get_user(u_id, message.from_user.first_name)
+    db = get_user(u_id)
     db["state"] = "none"
-    
     text = f"🎰 *Martin Kazino*\n\n💰 Balans: *{db['money']:,} so'm*\n\nO'yinni tanlang:"
     bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=main_markup(u_id))
 
-# TUGMALAR ISHLOVCHISI (KUTISHLARSIZ, SRAZU JAVOB BERADI)
 @bot.callback_query_handler(func=lambda call: call.data.startswith("game_"))
 def callback_inline(call):
     u_id = call.from_user.id
-    db = get_user(u_id, call.from_user.first_name)
+    db = get_user(u_id)
     back_markup = types.InlineKeyboardMarkup()
     back_markup.add(types.InlineKeyboardButton("⬅️ Menyu", callback_data="game_home"))
 
@@ -72,7 +76,7 @@ def callback_inline(call):
 
     elif call.data == "game_bonus":
         now = int(time.time())
-        if now - db["last_bonus"] < 3600: # 1 soat kutish
+        if now - db["last_bonus"] < 3600:
             rem = int((3600 - (now - db["last_bonus"])) // 60)
             bot.edit_message_text(f"⏱ Bonus olingan! Yana *{rem} daqiqa* kuting.", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
         else:
@@ -88,18 +92,16 @@ def callback_inline(call):
 
     elif call.data == "game_admin" and u_id == MAIN_ADMIN:
         db["state"] = "wait_admin"
-        bot.edit_message_text("👑 *Admin Panel*\n\nPul berish formati: `ID MIQDOR`\n_(Masalan: 7920504062 50000)_", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
+        bot.edit_message_text("👑 *Admin Panel*\n\nPul berish formati: `ID MIQDOR`", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
 
-# XABARLAR VA O'YINLARNING ASOSIY MANTIQI
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     u_id = message.from_user.id
     text = message.text.strip()
-    db = get_user(u_id, message.from_user.first_name)
+    db = get_user(u_id)
     back_markup = types.InlineKeyboardMarkup()
     back_markup.add(types.InlineKeyboardButton("⬅️ Menyu", callback_data="game_home"))
 
-    # 1. ADMIN PANEL
     if u_id == MAIN_ADMIN and db["state"] == "wait_admin":
         try:
             t_id, amt = map(int, text.split())
@@ -111,14 +113,12 @@ def handle_text(message):
             bot.send_message(message.chat.id, "❌ Xato! Namuna: `7920504062 10000`", reply_markup=back_markup)
         return
 
-    # 2. O'YINLAR UNTI
     if db["state"].startswith("wait_bet_"):
         g_mode = db["state"].split("_")[2]
-        
-        # Nuqta yoki vergullarni tozalash (2.000 -> 2000)
         clean_text = re.sub(r'[.,\s]', '', text)
+        
         if not clean_text.isdigit():
-            bot.send_message(message.chat.id, "❌ Faqat raqam kiriting! (Masalan: 2000)")
+            bot.send_message(message.chat.id, "❌ Faqat toza raqam kiriting! (Masalan: 2000)")
             return
             
         bet = int(clean_text)
@@ -132,10 +132,8 @@ def handle_text(message):
 
         if u_id != MAIN_ADMIN:
             db["money"] -= bet
-
         db["state"] = "none"
 
-        # DON-DON-ZIKI (MUTLOQ TEZKOR)
         if g_mode == "ddz":
             win = random.random() < 0.30 if bet > 4000 else random.random() < 0.45
             if win:
@@ -144,7 +142,6 @@ def handle_text(message):
             else:
                 bot.send_message(message.chat.id, f"🎮 *Don-Don-Ziki*\n\n✌️ Siz: Qaychi\n✊ Bot: Tosh\n\n📉 *Yutqazdingiz!* -{bet:,} so'm", parse_mode="Markdown", reply_markup=back_markup)
 
-        # DART JANGI (ANIMATSIYASIZ — ENG TEZKOR REJIM)
         elif g_mode == "dart":
             u_score = random.randint(1, 6)
             b_score = random.randint(u_score + 1, 6) if (bet > 4000 or random.random() < 0.6) and u_score < 6 else random.randint(1, 6)
@@ -161,10 +158,7 @@ def handle_text(message):
             bot.send_message(message.chat.id, res, parse_mode="Markdown", reply_markup=back_markup)
 
 if __name__ == '__main__':
-    # Serverni alohida potokda yoqamiz
     Thread(target=run_server).start()
-    
-    # Telegram eski so'rovlarni o'chirib, srazu toza va tez ishlashi uchun drop_pending_updates=True
-    print("Bot tayyor! Polling ishga tushmoqda...")
+    print("Bot muvaffaqiyatli ishlamoqda...")
     bot.infinity_polling(drop_pending_updates=True)
-    
+            
