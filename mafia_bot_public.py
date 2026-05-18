@@ -1,380 +1,222 @@
-import os, random, asyncio, urllib.request, json, time
-from flask import Flask, request
+import os
+import random
+import re
+import sqlite3
+from threading import Thread
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# FLASK SERVER (RENDER UCHUN)
+# RENDER UXLAB QOLMASLIGI UCHUN SODDA SERVER
 server = Flask('')
-
 @server.route('/')
-def home(): 
-    return "Casino Bot Webhook orqali Aktiv!"
+def home(): return "Bot 100% Aktiv va Toza!"
+
+def run_server():
+    port = int(os.environ.get("PORT", 8080))
+    server.run(host='0.0.0.0', port=port)
 
 # ASOSIY SOZLAMALAR
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062  
-TARGET_GROUP = "@yzbedkslls" 
-URL = "https://mafia-bot-1-cfvs.onrender.com"  # Sizning Render havolangiz
 
-USER_DATA = {}
-ADMIN_STATE = {} 
-GAME_BET_STATE = {} 
-USER_STATE = {} 
+# MA'LUMOTLAR BAZASINI SOZLASH (SQLITE)
+DB_FILE = "casino_database.db"
 
-SCHOOL_QUESTIONS = [
-    {"q": "O'zbekiston Respublikasi qachon mustaqillikka erishgan?", "o": ["1990-yil", "1991-yil", "1992-yil"], "a": "1991-yil"},
-    {"q": "Amir Temur nechanchi yilda tug'ilgan?", "o": ["1336-yil", "1405-yil", "1342-yil"], "a": "1336-yil"},
-    {"q": "Uchburchakning ichki burchaklari yig'indisi nechaga teng?", "o": ["90°", "180°", "360°"], "a": "180°"},
-    {"q": "Dunyodagi eng chuqur ko'l qaysi?", "o": ["Kaspiy", "Baykal", "Orol"], "a": "Baykal"},
-    {"q": "Suvning kimyoviy formulasi qaysi?", "o": ["CO2", "H2O", "O2"], "a": "H2O"},
-    {"q": "Alisher Navoiy qaysi shaharda tug'ilgan?", "o": ["Samarqand", "Xirot", "Buxoro"], "a": "Xirot"},
-    {"q": "Kvadratning tomoni 5 sm bo'lsa, uning yuzi nechaga teng?", "o": ["20 sm²", "25 sm²", "15 sm²"], "a": "25 sm²"},
-    {"q": "O'zbek tilida nechta unli tovush bor?", "o": ["5 ta", "6 ta", "10 ta"], "a": "6 ta"},
-    {"q": "Yer quyosh tizimidagi nechanchi sayyora?", "o": ["2-sayyora", "3-sayyora", "4-sayyora"], "a": "3-sayyora"}
-]
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            money INTEGER DEFAULT 6000,
+            last_bonus_time INTEGER DEFAULT 0,
+            admin_state TEXT DEFAULT 'none',
+            game_state TEXT DEFAULT 'none',
+            game_bet INTEGER DEFAULT 0
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# TELEGRAM APPLICATION GLOBAL OB'EKTI
-app = None
+init_db()
 
-@server.route('/' + TOKEN, methods=['POST'])
-def webhook():
-    if request.method == "POST":
-        update = Update.de_json(request.get_json(force=True), app.bot)
-        asyncio.run(app.process_update(update))
-    return 'ok'
-
-def get_user(user_id, name):
-    if user_id not in USER_DATA:
-        USER_DATA[user_id] = {
-            "name": name,
-            "money": 6000,         
-            "games_played": 0,      
-            "games_won": 0,         
-            "games_lost": 0,        
-            "group_bonus_received": False,
-            "last_bonus_time": 0,
-            "last_quiz_time": 0,
-            "current_q_index": 0,
-            "quiz_correct_answers": 0,
-            "bonus_questions": 0
+def get_user_db(user_id, name="O'yinchi"):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT money, last_bonus_time, admin_state, game_state, game_bet FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    
+    if row is None:
+        initial_money = 999999999 if user_id == MAIN_ADMIN else 6000
+        cursor.execute("INSERT INTO users (user_id, name, money) VALUES (?, ?, ?)", (user_id, name, initial_money))
+        conn.commit()
+        res = {"money": initial_money, "last_bonus_time": 0, "admin_state": "none", "game_state": "none", "game_bet": 0}
+    else:
+        res = {
+            "money": row[0],
+            "last_bonus_time": row[1],
+            "admin_state": row[2],
+            "game_state": row[3],
+            "game_bet": row[4]
         }
+    conn.close()
     if user_id == MAIN_ADMIN:
-        USER_DATA[user_id]["money"] = 999999999 
-    return USER_DATA[user_id]
+        res["money"] = 999999999
+    return res
 
-def check_group_member(user_id):
-    try:
-        url = f"https://api.telegram.org/bot{TOKEN}/getChatMember?chat_id={TARGET_GROUP}&user_id={user_id}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            res = json.loads(response.read().decode())
-            if res.get("ok"):
-                status = res["result"]["status"]
-                if status in ["creator", "administrator", "member"]:
-                    return True
-    except:
-        pass
-    return False
+def update_user_db(user_id, **kwargs):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    for key, value in kwargs.items():
+        cursor.execute(f"UPDATE users SET {key} = ? WHERE user_id = ?", (value, user_id))
+    conn.commit()
+    conn.close()
+
+# BOSH MENYUGU TUGMALARI
+def get_main_keyboard(user_id):
+    kb = [
+        [InlineKeyboardButton("🎮 Don-Don-Ziki", callback_data="menu_ddz"), InlineKeyboardButton("🎯 Dart O'yin", callback_data="menu_dart")],
+        [InlineKeyboardButton("🎁 Kunlik Bonus", callback_data="menu_bonus")]
+    ]
+    if user_id == MAIN_ADMIN:
+        kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="menu_admin")])
+    return InlineKeyboardMarkup(kb)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    db = get_user(user.id, user.first_name)
-    ADMIN_STATE.pop(user.id, None)
-    GAME_BET_STATE.pop(user.id, None)
-    USER_STATE.pop(user.id, None)
-
-    text = (
-        f"🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
-        f"💰 Sening hisobing: *{db['money']:,} so'm*\n\n"
-        f"O'yin o'ynash va pul ishlash uchun tugmalarni bosing:"
-    )
+    db = get_user_db(user.id, user.first_name)
     
-    kb = [
-        [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz"), InlineKeyboardButton("🎯 Dart O'ynash", callback_data="play_dart")],
-        [InlineKeyboardButton("🔍 Pul Qidirmoq (Savollar)", callback_data="quiz_start"), InlineKeyboardButton("🗄 Shaxsiy Kabinet", callback_data="cabinet")],
-        [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit"), InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw")],
-        [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
-    ]
-    if user.id == MAIN_ADMIN:
-        kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
+    # Holatlarni srazu tozalash
+    update_user_db(user.id, admin_state='none', game_state='none', game_bet=0)
 
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    text = f"🎰 *Martin Kazino Bot*\n\n💰 Balansingiz: *{db['money']:,} so'm*\n\nQuyidagi o'yinlardan birini tanlang:"
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_keyboard(user.id))
 
-async def buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     u_id = query.from_user.id
-    db = get_user(u_id, query.from_user.first_name)
-    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="home")]])
+    db = get_user_db(u_id, query.from_user.first_name)
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="menu_home")]])
 
-    if query.data == "home":
-        ADMIN_STATE.pop(u_id, None)
-        GAME_BET_STATE.pop(u_id, None)
-        USER_STATE.pop(u_id, None)
-        kb = [
-            [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz"), InlineKeyboardButton("🎯 Dart O'ynash", callback_data="play_dart")],
-            [InlineKeyboardButton("🔍 Pul Qidirmoq (Savollar)", callback_data="quiz_start"), InlineKeyboardButton("🗄 Shaxsiy Kabinet", callback_data="cabinet")],
-            [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit"), InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw")],
-            [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
-        ]
-        if u_id == MAIN_ADMIN:
-            kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
-        await query.edit_message_text(f"🎰 Joriy balansingiz: *{db['money']:,} so'm*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    if query.data == "menu_home":
+        update_user_db(u_id, admin_state='none', game_state='none', game_bet=0)
+        db = get_user_db(u_id)
+        await query.edit_message_text(f"🎰 *Martin Kazino*\n\n💰 Joriy balans: *{db['money']:,} so'm*", parse_mode="Markdown", reply_markup=get_main_keyboard(u_id))
 
-    elif query.data == "cabinet":
-        win_rate = 0
-        if db["games_played"] > 0:
-            win_rate = int((db["games_won"] / db["games_played"]) * 100)
-            
-        cabinet_text = (
-            f"🗄 *Sizning Shaxsiy Kabunetingiz*\n\n"
-            f"👤 Ismingiz: *{db['name']}*\n"
-            f"🆔 ID Raqamingiz: `{u_id}`\n"
-            f"💰 Balansingiz: *{db['money']:,} so'm*\n\n"
-            f"📊 *O'yinlar Statistikasi:*\n"
-            f"🎮 Jami o'yinlar: *{db['games_played']} marta*\n"
-            f"🏆 G'alabalar: *{db['games_won']} marta*\n"
-            f"📉 Mag'lubiyatlar: *{db['games_lost']} marta*\n"
-            f"📈 Omad darajasi: *{win_rate}%*"
-        )
-        await query.edit_message_text(cabinet_text, parse_mode="Markdown", reply_markup=back_kb)
-
-    elif query.data == "quiz_start":
-        current_time = time.time()
-        time_passed = current_time - db["last_quiz_time"]
-
-        if time_passed < 18000 and db["bonus_questions"] <= 0:  
-            remaining_minutes = int((18000 - time_passed) // 60)
-            await query.edit_message_text(f"⏱ *Savollar tugagan!*\n\nYangi savollar ochilishi uchun yana *{remaining_minutes} daqiqa* kutishingiz kerak!", parse_mode="Markdown", reply_markup=back_kb)
-            return
-
-        db["current_q_index"] = 0
-        db["quiz_correct_answers"] = 0
-        
-        q_data = SCHOOL_QUESTIONS[0]
-        text = f"🔍 *Pul qidirmoq bo'limi (1/9-Savol):*\n\n🤔 Savol: *{q_data['q']}*\n\nTo'g'ri javobga *900 so'm* beriladi!"
-        kb = [[InlineKeyboardButton(opt, callback_data=f"quiz_ans_0_{i}")] for i, opt in enumerate(q_data["o"])]
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif query.data.startswith("quiz_ans_"):
-        parts = query.data.split("_")
-        q_idx = int(parts[2])
-        opt_idx = int(parts[3])
-
-        q_data = SCHOOL_QUESTIONS[q_idx]
-        selected_answer = q_data["o"][opt_idx]
-
-        if selected_answer == q_data["a"]:
-            db["money"] += 900
-            db["quiz_correct_answers"] += 1
-            res_text = "✅ *To'g'ri javob!* Hisobingizga *+900 so'm* qo'shildi.\n\n"
+    elif query.data == "menu_bonus":
+        import time
+        now = int(time.time())
+        # Har 12 soatda bitta haqiqiy katta bonus (asabga tegmasligi uchun vaqti kamaytirildi)
+        if now - db["last_bonus_time"] < 43200:
+            rem = int((43200 - (now - db["last_bonus_time"])) // 60)
+            await query.edit_message_text(f"⏱ *Bonus olingan!*\nYana *{rem} daqiqa* kuting.", reply_markup=back_kb)
         else:
-            res_text = f"❌ *Noto'g'ri javob!* To'g'ri javob: *{q_data['a']}* edi.\n\n"
+            gift = random.randint(1000, 5000)
+            new_money = db["money"] + gift
+            update_user_db(u_id, money=new_money, last_bonus_time=now)
+            await query.edit_message_text(f"🎁 Tabriklaymiz!\nHisobingizga *+{gift:,} so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_kb)
 
-        next_idx = q_idx + 1
+    elif query.data in ["menu_ddz", "menu_dart"]:
+        game_type = "ddz" if query.data == "menu_ddz" else "dart"
+        update_user_db(u_id, game_state=f"wait_bet_{game_type}")
+        await query.edit_message_text("✍️ *Tikmoqchi bo'lgan pul miqdoringizni kiriting:*\n*(Masalan: 2000 yoki 5000)*", parse_mode="Markdown")
 
-        if next_idx < 9:
-            next_q = SCHOOL_QUESTIONS[next_idx]
-            text = res_text + f"🔍 *{next_idx+1}/9-Savol:*\n\n🤔 Savol: *{next_q['q']}*"
-            kb = [[InlineKeyboardButton(opt, callback_data=f"quiz_ans_{next_idx}_{i}")] for i, opt in enumerate(next_q["o"])]
-            await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        else:
-            db["last_quiz_time"] = time.time()
-            if db["bonus_questions"] > 0:
-                db["bonus_questions"] -= 1 
+    elif query.data == "menu_admin" and u_id == MAIN_ADMIN:
+        update_user_db(u_id, admin_state="waiting_command")
+        admin_text = "👑 *Admin Panel*\n\nFoydalanuvchiga pul berish uchun pastdagi formatda yozing:\n`ID MIQDOR`\n\n*Masalan:* `7920504062 25000`"
+        await query.edit_message_text(admin_text, parse_mode="Markdown", reply_markup=back_kb)
 
-            total_earned = db["quiz_correct_answers"] * 900
-            end_text = (
-                f"🎉 *Savollar tugadi!*\n\n"
-                f"📊 Natijangiz: *9 ta savoldan {db['quiz_correct_answers']} tasiga* to'g'ri javob berdingiz.\n"
-                f"💰 Jami ishlangan pul: *+{total_earned:,} so'm*\n"
-                f"⏱ Yangi savollar *5 soatdan keyin* yangilanadi!"
-            )
-            await query.edit_message_text(end_text, parse_mode="Markdown", reply_markup=back_kb)
-
-    elif query.data == "deposit":
-        text = "💳 *PUL KIRITISH BO'LIMI*\n\nBot hisobingizni to'ldirish uchun pastdagi tugma orqali adminga murojaat qiling va chekni yuboring:"
-        kb = [[InlineKeyboardButton("👨‍💻 Admin Shaxsiy Chati", url="tg://user?id=7920504062")],[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif query.data == "withdraw":
-        if db["money"] < 24000:
-            await query.edit_message_text("⚠️ *Pul yechish rad etildi!*\n\n❌ Botdan eng kam pul yechish miqdori: *24,000 UZS*!", parse_mode="Markdown", reply_markup=back_kb)
-        else:
-            USER_STATE[u_id] = "waiting_card"
-            await query.edit_message_text("💳 *Hisobingizda pul yetarli!*\n\nIltimos, pul o'tkaziladigan *Karta raqamingizni* va *Ism-familiyangizni* yozib yuboring:", parse_mode="Markdown")
-
-    elif query.data == "bonus":
-        current_time = time.time()
-        time_passed = current_time - db["last_bonus_time"]
-        if time_passed < 7200: 
-            remaining_minutes = int((7200 - time_passed) // 60)
-            await query.edit_message_text(f"⏱ *Bonus hali tayyor emas!*\n\nYana *{remaining_minutes} daqiqa* kutishingiz kerak!", parse_mode="Markdown", reply_markup=back_kb)
-        else:
-            rand_bonus = random.randint(200, 1000)
-            db["money"] += rand_bonus
-            db["last_bonus_time"] = current_time 
-            await query.edit_message_text(f"🎁 *Tabriklaymiz!*\n\nSizga *+{rand_bonus} so'm* bonus berildi!", parse_mode="Markdown", reply_markup=back_kb)
-
-    elif query.data == "earn":
-        if db["group_bonus_received"]:
-            await query.edit_message_text("❌ Siz bu guruhga a'zo bo'lib bonusni olgansiz!", reply_markup=back_kb)
-            return
-        text = "🚀 *PUL ISHLASH BO'LIMI*\n\nGuruhimizga obuna bo'ling va srazu *4,000 so'm* naqd pulga ega bo'ling:\n\n👉 https://t.me/yzbedkslls"
-        kb = [[InlineKeyboardButton("🔗 Guruhga kirish", url="https://t.me/yzbedkslls")],[InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")],[InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]]
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif query.data == "check_sub":
-        if check_group_member(u_id):
-            db["money"] += 4000
-            db["group_bonus_received"] = True
-            await query.edit_message_text(f"🎉 Hisobingizga *+4,000 so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_kb)
-        else:
-            await query.edit_message_text("❌ Siz hali guruhga a'zo bo'lmagansiz!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Guruhga kirish", url="https://t.me/yzbedkslls")],[InlineKeyboardButton("🔄 Qayta tekshirish", callback_data="check_sub")]]))
-
-    elif query.data == "play_ddz":
-        GAME_BET_STATE[u_id] = "waiting_bet_ddz"
-        await query.edit_message_text(f"🎮 *Don-Don-Ziki O'yini*\n\n✍️ Qancha pul tikmoqchisiz? Miqdorini yozing (Maks 5,000):", parse_mode="Markdown")
-
-    elif query.data.startswith("ddz_"):
-        choice = query.data.split("_")[1]
-        bet = GAME_BET_STATE.get(u_id + 1000000000, 600)
-        db["games_played"] += 1
-        options = ["tosh", "qaychi", "qogoz"]
-        names = {"tosh": "Tosh ✊", "qaychi": "Qaychi ✌️", "qogoz": "Qog'oz 🖐"}
-
-        if bet > 3000:
-            bot_choice = "qogoz" if choice == "tosh" else "tosh" if choice == "qaychi" else "qaychi"
-            result = "lose"
-        elif db["games_played"] <= 2:
-            bot_choice = "qaychi" if choice == "tosh" else "qogoz" if choice == "qaychi" else "tosh"
-            result = "win"
-        else:
-            if random.random() < 0.65:
-                bot_choice = "qogoz" if choice == "tosh" else "tosh" if choice == "qaychi" else "qaychi"
-                result = "lose"
-            else:
-                bot_choice = random.choice(options)
-                result = "win" if (choice == "tosh" and bot_choice == "qaychi") or (choice == "qaychi" and bot_choice == "qogoz") or (choice == "qogoz" and bot_choice == "tosh") else "draw" if choice == bot_choice else "lose"
-
-        text = f"🎮 *DON-DON-ZIKI JANGI*\n\n👤 Siz: {names[choice]}\n🤖 Bot: {names[bot_choice]}\n\n"
-        if result == "win":
-            db["money"] += (bet * 2)
-            db["games_won"] += 1
-            text += f"🏆 *Siz Yutdingiz!*\n💰 Hisobga: *+{bet*2:,} so'm*"
-        elif result == "lose":
-            db["games_lost"] += 1
-            text += f"📉 *Siz Yutqazdingiz!*\nKetgan pul: *-{bet:,} so'm*"
-        else:
-            db["money"] += bet
-            text += f"🤝 *Durang!*"
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_kb)
-
-    elif query.data == "play_dart":
-        GAME_BET_STATE[u_id] = "waiting_bet_dart"
-        await query.edit_message_text(f"🎯 *Dart O'yini*\n\n✍️ Qancha pul tikmoqchisiz? Miqdorini yozing (Maks 5,000):", parse_mode="Markdown")
-
-    elif query.data == "admin" and u_id == MAIN_ADMIN:
-        ADMIN_STATE[u_id] = "waiting"
-        await query.edit_message_text("👑 *Admin Panel*\n\n📌 *Pul berish:* `ID Miqdor` (Masalan: `7920504062 5000`)\n📌 *Qo'shimcha 10 savol berish:* `ID +10` (Masalan: `7920504062 +10`)", parse_mode="Markdown")
-
-async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u_id = update.effective_user.id
     text = update.message.text.strip()
-    db = get_user(u_id, update.effective_user.first_name)
+    db = get_user_db(u_id, update.effective_user.first_name)
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="menu_home")]])
 
-    if USER_STATE.get(u_id) == "waiting_card":
-        USER_STATE.pop(u_id, None)
-        admin_alert = f"💰 *PUL YECHISH SO'ROVI!*\n\n👤 Foydalanuvchi: {update.effective_user.first_name}\n🆔 ID: `{u_id}`\n💳 Karta: `{text}`"
-        await context.bot.send_message(chat_id=MAIN_ADMIN, text=admin_alert, parse_mode="Markdown")
-        await update.message.reply_text("✅ *Arizangiz qabul qilindi!*", parse_mode="Markdown")
-
-    elif GAME_BET_STATE.get(u_id) == "waiting_bet_ddz":
+    # 1. ADMIN PANEL ISHLASHI
+    if u_id == MAIN_ADMIN and db["admin_state"] == "waiting_command":
         try:
-            bet = int(text)
-            if bet < 600 or bet > 5000 or db["money"] < bet:
-                await update.message.reply_text("❌ Pul kam yoki xato!")
-                return
-            db["money"] -= bet
-            GAME_BET_STATE[u_id + 1000000000] = bet
-            GAME_BET_STATE[u_id] = "playing"
-            kb = [[InlineKeyboardButton("✊ Tosh", callback_data="ddz_tosh")],[InlineKeyboardButton("✌️ Qaychi", callback_data="ddz_qaychi")],[InlineKeyboardButton("🖐 Qog'oz", callback_data="ddz_qogoz")]]
-            await update.message.reply_text(f"💰 *{bet:,} so'm* tikildi! Tanlang:", reply_markup=InlineKeyboardMarkup(kb))
-        except: await update.message.reply_text("❌ Raqam kiriting!")
-
-    elif GAME_BET_STATE.get(u_id) == "waiting_bet_dart":
-        try:
-            bet = int(text)
-            if bet < 600 or bet > 5000 or db["money"] < bet:
-                await update.message.reply_text("❌ Pul xato!")
-                return
-            db["money"] -= bet
-            db["games_played"] += 1
-            GAME_BET_STATE.pop(u_id, None)
-            
-            user_msg = await context.bot.send_dice(chat_id=update.effective_chat.id, emoji="🎯")
-            user_score = user_msg.dice.value
-            await asyncio.sleep(2)
-
-            if bet > 4000 or random.random() < 0.65:
-                bot_score = random.randint(user_score + 1, 6) if user_score < 6 else 6
-                if bot_score <= user_score: user_score = random.randint(1, bot_score - 1) if bot_score > 1 else 1
-                result = "lose"
-            else:
-                bot_msg = await context.bot.send_dice(chat_id=update.effective_chat.id, emoji="🎯")
-                bot_score = bot_msg.dice.value
-                result = "win" if user_score > bot_score else "lose" if user_score < bot_score else "draw"
-
-            if 'bot_msg' not in locals():
-                await update.message.reply_text("🤖 *Bot dart otmoqda...*")
-                bot_msg = await context.bot.send_dice(chat_id=update.effective_chat.id, emoji="🎯")
-                bot_score = bot_msg.dice.value if bot_msg.dice.value > user_score else user_score + 1 if user_score < 6 else 6
-
-            back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="home")]])
-            text_res = f"🎯 *DART JANGI*\n\n👤 Siz: *{user_score}*\n🤖 Bot: *{bot_score}*\n\n"
-            if result == "win":
-                db["money"] += (bet * 2); db["games_won"] += 1
-                text_res += f"🏆 *Siz Yutdingiz!* +{bet*2:,} so'm"
-            elif result == "lose":
-                db["games_lost"] += 1
-                text_res += f"📉 *Bot Yutdi!* -{bet:,} so'm"
-            else:
-                db["money"] += bet
-                text_res += "🤝 *Durang!*"
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=text_res, parse_mode="Markdown", reply_markup=back_kb)
-        except: await update.message.reply_text("❌ Xato!")
-
-    elif u_id == MAIN_ADMIN and ADMIN_STATE.get(u_id) == "waiting":
-        try:
-            if "+10" in text:
-                target_id = int(text.split()[0])
-                user_db = get_user(target_id, "O'yinchi")
-                user_db["last_quiz_time"] = 0  
-                user_db["bonus_questions"] += 1 
-                ADMIN_STATE.pop(u_id, None)
-                await update.message.reply_text(f"✅ Xizmat muvaffaqiyatli! Foydalanuvchi `{target_id}` ga qo'shimcha 10 ta maktab savoli qo'shib berildi!", parse_mode="Markdown")
-            else:
-                target_id, amount = map(int, text.split())
-                user_db = get_user(target_id, "O'yinchi")
-                user_db["money"] += amount
-                ADMIN_STATE.pop(u_id, None)
-                await update.message.reply_text(f"✅ Balans o'zgardi!")
+            target_id, amount = map(int, text.split())
+            target_db = get_user_db(target_id)
+            update_user_db(target_id, money=target_db["money"] + amount)
+            update_user_db(u_id, admin_state="none")
+            await update.message.reply_text(f"✅ `ID: {target_id}` hisobiga *+{amount:,} so'm* muvaffaqiyatli qo'shildi!", parse_mode="Markdown", reply_markup=back_kb)
         except:
-            await update.message.reply_text("❌ Xato! Namuna: `7920504062 +10` yoki `7920504062 5000`")
+            await update.message.reply_text("❌ Xato format! Namuna: `7920504062 5000`", reply_markup=back_kb)
+        return
 
-async def init_webhook():
-    global app
+    # 2. O'YINLAR UCHUN PUL TIKISH TEKSHIRUVI
+    if db["game_state"].startswith("wait_bet_"):
+        game_mode = db["game_state"].split("_")[2] # ddz yoki dart
+        
+        # FOYDALANUVCHILAR NUQTA BILAN YOZSA HAM TOG'RILASH (Masalan: 2.000 -> 2000)
+        clean_text = re.sub(r'[.,\s]', '', text)
+        
+        if not clean_text.isdigit():
+            await update.message.reply_text("❌ Iltimos, faqat toza raqam kiriting! (Masalan: 2000)")
+            return
+            
+        bet = int(clean_text)
+        if bet < 500 or bet > 50000:
+            await update.message.reply_text("❌ Eng kam tikish 500 so'm, eng ko'pi 50,000 so'm!")
+            return
+            
+        if db["money"] < bet and u_id != MAIN_ADMIN:
+            await update.message.reply_text(f"❌ Balansingizda mablag' yetarli emas!\nSizda: *{db['money']:,} so'm* bor.", parse_mode="Markdown")
+            return
+
+        # Pulni yechish va o'yin holatiga o'tkazish
+        if u_id != MAIN_ADMIN:
+            update_user_db(u_id, money=db["money"] - bet, game_bet=bet, game_state=f"playing_{game_mode}")
+        else:
+            update_user_db(u_id, game_bet=bet, game_state=f"playing_{game_mode}")
+
+        # SRAZU CHAQMOQDEK NATIJANI HISOBLASH (KUTISHLARSIZ)
+        if game_mode == "ddz":
+            # Don-Don-Ziki: Tikilgan pul 5000 dan baland bo'lsa bot yutish imkoniyatini pasaytiradi (Kazino balansi uchun)
+            win_chance = 0.30 if bet > 5000 else 0.45
+            is_win = random.random() < win_chance
+            
+            if is_win:
+                update_user_db(u_id, money=get_user_db(u_id)["money"] + (bet * 2), game_state="none", game_bet=0)
+                await update.message.reply_text(f"🎮 *Don-Don-Ziki Natijasi:*\n\n✊ Siz: *Tosh*\n✌️ Bot: *Qaychi*\n\n🏆 *Siz yutdingiz!* Hisobingizga *+{bet*2:,} so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_kb)
+            else:
+                update_user_db(u_id, game_state="none", game_bet=0)
+                await update.message.reply_text(f"🎮 *Don-Don-Ziki Natijasi:*\n\n✌️ Siz: *Qaychi*\n✊ Bot: *Tosh*\n\n📉 *Yutqazdingiz!* Hisobingizdan *-{bet:,} so'm* ketdi.", parse_mode="Markdown", reply_markup=back_kb)
+
+        elif game_mode == "dart":
+            # Dart: Tezkor ochkolar tizimi
+            u_score = random.randint(1, 6)
+            b_score = random.randint(u_score + 1, 6) if (bet > 5000 or random.random() < 0.6) and u_score < 6 else random.randint(1, 6)
+            
+            res_text = f"🎯 *Dart Natijalari:*\n\n👤 Sizning ochkongiz: *{u_score}*\n🤖 Botning ochkosi: *{b_score}*\n\n"
+            
+            if u_score > b_score:
+                update_user_db(u_id, money=get_user_db(u_id)["money"] + (bet * 2), game_state="none", game_bet=0)
+                res_text += f"🏆 *Ajoyib! Siz yutdingiz!* \n💰 Yutuq: *+{bet*2:,} so'm*"
+            elif u_score < b_score:
+                update_user_db(u_id, game_state="none", game_bet=0)
+                res_text += f"📉 *Bot yutdi!* \nZarar: *-{bet:,} so'm*"
+            else:
+                update_user_db(u_id, money=get_user_db(u_id)["money"] + bet, game_state="none", game_bet=0)
+                res_text += "🤝 *Durang!* Tikilgan pulingiz o'zingizga qaytarildi."
+                
+            await update.message.reply_text(res_text, parse_mode="Markdown", reply_markup=back_kb)
+        return
+
+def main():
+    Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(buttons_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    await app.initialize()
-    await app.bot.set_webhook(url=f"{URL}/{TOKEN}")
-    print("Webhook muvaffaqiyatli o'rnatildi!")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(callback_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    
+    print("Bot xatosiz va tezkor rejimda ishga tushmoqda...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
-    asyncio.run(init_webhook())
-    port = int(os.environ.get("PORT", 8080))
-    server.run(host='0.0.0.0', port=port)
+    main()
     
