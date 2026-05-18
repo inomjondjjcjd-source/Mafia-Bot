@@ -14,243 +14,301 @@ TOKEN = "8303235336:AAEk3J42idbz1KcamIWPC2L3_IlROPeoadI"
 ADMIN_ID = 8086545587  
 DATA_FILE = "mega_games_bot_db.json"
 
-DB = {"users": {}, "promocodes": {}, "settings": {"vip_price": 40000, "ticket_price": 4000, "min_withdraw": 15000, "chat_hour_price": 1000}, "stats": {"total_games": 0, "total_prizes_given": 0}}
-WHEEL_PRIZES = [{"name": "💰 1k so'm", "val": 1000, "w": 50}, {"name": "💰 3k so'm", "val": 3000, "w": 25}, {"name": "🔥 7k so'm", "val": 7000, "w": 12}, {"name": "👑 15k Jekpot!", "val": 15000, "w": 3}, {"name": "🎫 1 chipta", "val": 1, "w": 10}]
-
-LOVE_PHRASES = [
-    "Salom, begim! Sen bilan har bir lahza bu yerda yomg'irli qishloqdagi toza havoni eslatadi. Bugun ham hammasi ortiqcha, ko'nglim ortiqcha, hamda o'zimni hayratda qoldiradi. 💕",
-    "Jonim, ko'zlaringizni daxshatli sog'indim... Hayotimda borligingiz uchun rahmat! Aytingchi, bugun menga qanchalik vaqt ajratasiz? 🌹",
-    "Begim, yuragim har soniyada faqat siz deb uradi! Siz daxshatli darajada mukammalsiz. Menga shunchaki pastdan yozing jonim... 🥰"
-]
+DB = {
+    "users": {}, 
+    "promocodes": {}, 
+    "settings": {"ticket_price": 4000, "min_withdraw": 15000}, 
+    "stats": {"total_games": 0, "total_prizes_given": 0}
+}
 
 def load_db():
     global DB
     if os.path.exists(DATA_FILE):
         try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f: DB = json.load(f); DB["users"] = {int(k): v for k, v in DB.get("users", {}).items()}
+            with open(DATA_FILE, "r", encoding="utf-8") as f: 
+                DB = json.load(f)
+                DB["users"] = {int(k): v for k, v in DB.get("users", {}).items()}
+                if "promocodes" not in DB: DB["promocodes"] = {}
+                if "stats" not in DB: DB["stats"] = {"total_games": 0, "total_prizes_given": 0}
         except: pass
 
 def save_db():
     try:
-        to_save = DB.copy(); to_save["users"] = {str(k): v for k, v in DB["users"].items()}
+        to_save = DB.copy()
+        to_save["users"] = {str(k): v for k, v in DB["users"].items()}
         with open(DATA_FILE, "w", encoding="utf-8") as f: json.dump(to_save, f, indent=4, ensure_ascii=False)
     except: pass
 
 def check_user(user_id, name="Foydalanuvchi"):
     if user_id not in DB["users"]:
-        DB["users"][user_id] = {"name": name, "balance": 5000, "tickets": 0, "vip_until": 0, "chat_until": 0, "total_won": 0, "games_played": 0, "mines_game": None}
+        DB["users"][user_id] = {
+            "name": name, 
+            "balance": 5000, 
+            "tickets": 0, 
+            "total_won": 0, 
+            "games_played": 0, 
+            "mines_game": None
+        }
         save_db()
     return DB["users"][user_id]
 
+# 🎮 ASOSIY BOSH MENYU (BELGILANGANLAR QOLDI)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id; ud = check_user(uid, update.effective_user.first_name); tm = time.time()
-    vip = "🔥 VIP" if ud["vip_until"] > tm else "❌ Yo'q"
-    chat_st = "❤️ Faol" if ud["chat_until"] > tm else "❌ Tugagan"
+    uid = update.effective_user.id
+    ud = check_user(uid, update.effective_user.first_name)
     
-    txt = f"❤️ *SUPER SEVGI VA MEGA O'YINLAR BOTI* uka\n\n💵 Balans: {ud['balance']} so'm\n🎫 O'yin chiptalari: {ud['tickets']} ta\n👑 VIP Status: {vip}\n💬 Suhbat vaqti: {chat_st}\n\nQuyidagi menyudan daxshatli bo'limni tanlang 👇"
+    txt = (
+        f"🔥 *SHOX SUPREME PLATFORMA* uka\n\n"
+        f"💵 *Balansingiz:* {ud['balance']} so'm\n"
+        f"🎫 *O'yin chiptalari:* {ud['tickets']} ta\n\n"
+        f"Faqat eng daxshatli va mukammal bo'limlar 👇"
+    )
+    
     kb = [
-        [InlineKeyboardButton("💬 Sevgi Suhbat Rejimi", callback_data="open_chat"), InlineKeyboardButton("🎰 Omad G'ildiragi", callback_data="g_wheel")],
-        [InlineKeyboardButton("💣 Mines (Mina)", callback_data="g_mines"), InlineKeyboardButton("🎰 Slot (777)", callback_data="g_slot")],
-        [InlineKeyboardButton("🪙 PvP Tanga (Guruh)", callback_data="g_pvp"), InlineKeyboardButton("📦 Maxfiy Keyslar", callback_data="g_cases")],
-        [InlineKeyboardButton("🎫 Chipta (4k)", callback_data="b_ticket"), InlineKeyboardButton("👑 VIP (40k)", callback_data="b_vip")],
-        [InlineKeyboardButton("💬 1 Soat Suhbat (1k)", callback_data="buy_chat_hour"), InlineKeyboardButton("💳 Pul yechish", callback_data="withdraw")]
+        [InlineKeyboardButton("💣 Mines (Mina)", callback_data="g_mines"),
+         InlineKeyboardButton("📦 Maxfiy Keyslar", callback_data="g_cases")],
+        [InlineKeyboardButton("🎫 Chipta Xarid Qilish (4k)", callback_data="b_ticket")],
     ]
-    if uid == ADMIN_ID: kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
+    
+    if uid == ADMIN_ID: 
+        kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_dashboard")])
+        
     rm = InlineKeyboardMarkup(kb)
-    if update.message: await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=rm)
-    else: await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=rm)
+    if update.message: 
+        await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=rm)
+    else: 
+        await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=rm)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer(); uid = q.from_user.id; ud = check_user(uid); tm = time.time()
-    is_vip = ud["vip_until"] > tm
+    q = update.callback_query; await q.answer(); uid = q.from_user.id; ud = check_user(uid)
 
-    if q.data == "to_main": await start(update, context)
+    if q.data == "to_main": 
+        await start(update, context)
+        
+    # 🎫 CHIPTA SOTIB OLISH (4,000 SO'M)
     elif q.data == "b_ticket":
-        if ud["balance"] < 4000: await q.edit_message_text("❌ Pul yetarli emas!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
-        ud["balance"] -= 4000; ud["tickets"] += 1; save_db(); await start(update, context)
-    elif q.data == "b_vip":
-        if ud["balance"] < 40000: await q.edit_message_text("❌ Pul yetarli emas!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
-        ud["balance"] -= 40000; ud["vip_until"] = max(tm, ud["vip_until"]) + 86400; save_db(); await start(update, context)
-    elif q.data == "buy_chat_hour":
-        price = DB["settings"]["chat_hour_price"]
-        if ud["balance"] < price: await q.edit_message_text(f"❌ Balansda kamida {price} so'm bo'lishi kerak!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
-        ud["balance"] -= price; ud["chat_until"] = max(tm, ud["chat_until"]) + 3600; save_db(); await start(update, context)
-    
-    elif q.data == "open_chat":
-        await q.edit_message_text("🥰 *Suhbat rejimi yoqildi!* Menga xabar yozing jonim, men srazu daxshatli javob beraman!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]))
-
-    # 🎰 1. G'ILDIRAK
-    elif q.data == "g_wheel":
-        if not is_vip and ud["tickets"] < 1: await q.edit_message_text("❌ Chipta yo'q uka!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎫 Chipta", callback_data="b_ticket")]])); return
-        if not is_vip: ud["tickets"] -= 1
-        p = random.choices(WHEEL_PRIZES, weights=[x["w"] for x in WHEEL_PRIZES])[0]
-        if p["name"] == "🎫 1 chipta": ud["tickets"] += 1
-        else: ud["balance"] += p["val"]; ud["total_won"] += p["val"]
+        if ud["balance"] < 4000: 
+            await q.edit_message_text("❌ Balansda pul yetarli emas uka!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
+            return
+        ud["balance"] -= 4000
+        ud["tickets"] += 1
         save_db()
-        await q.edit_message_text(f"🎰 Yutuq: *{p['name']}*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 Yana", callback_data="g_wheel")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
-
-    # 💣 2. MINES
+        await start(update, context)
+    
+    # 💣 1. MINES (MINA) O'YINI MUKAMMAL HOLATDA
     elif q.data == "g_mines":
         if not ud["mines_game"]:
-            if not is_vip and ud["tickets"] < 1: await q.edit_message_text("❌ Chipta yo'q!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎫", callback_data="b_ticket")]])); return
-            if not is_vip: ud["tickets"] -= 1
-            grid = ["clean"]*9; m_idx = random.sample(range(9), 2)
+            if ud["tickets"] < 1: 
+                await q.edit_message_text("❌ O'yinni boshlash uchun chiptangiz yo'q uka! Chipta sotib oling.", 
+                                              reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎫 Chipta olish", callback_data="b_ticket")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+                return
+            ud["tickets"] -= 1
+            grid = ["clean"] * 9
+            m_idx = random.sample(range(9), 2)  # 2 ta daxshatli mina
             for idx in m_idx: grid[idx] = "mine"
-            ud["mines_game"] = {"grid": grid, "revealed": [False]*9, "payout": 4000, "step": 0}; save_db()
+            ud["mines_game"] = {"grid": grid, "revealed": [False] * 9, "payout": 4000, "step": 0}
+            save_db()
         await show_mines(q, ud)
+        
     elif q.data.startswith("m_clk_"):
-        idx = int(q.data.split("_")[2]); mg = ud["mines_game"]
+        idx = int(q.data.split("_")[2])
+        mg = ud["mines_game"]
         if not mg or mg["revealed"][idx]: return
+        
         mg["revealed"][idx] = True
         if mg["grid"][idx] == "mine":
-            ud["mines_game"] = None; save_db()
-            await q.edit_message_text("💥 BOOOM! Minaga tushdingiz uka, yutuq kuydi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💣 Qayta", callback_data="g_mines")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+            ud["mines_game"] = None
+            ud["games_played"] += 1
+            DB["stats"]["total_games"] += 1
+            save_db()
+            await q.edit_message_text("💥 *BOOOM! Daxshatli minaga portladingiz!* 💥\nHamma yig'ilgan summalar yonib ketdi. Keyingi safar omad keladi uka!", parse_mode="Markdown",
+                                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💣 Qayta o'ynash", callback_data="g_mines")], [InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]]))
             return
-        mg["step"] += 1; mg["payout"] += 2500; save_db()
-        if mg["step"] == 7:
-            ud["balance"] += mg["payout"]; ud["total_won"] += mg["payout"]; ud["mines_game"] = None; save_db()
-            await q.edit_message_text(f"👑 Daxshat! +{mg['payout']} so'm yutdingiz!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+            
+        mg["step"] += 1
+        mg["payout"] = int(mg["payout"] * 1.6)  # Koeffitsiyent daxshatli o'sadi
+        save_db()
+        
+        if mg["step"] == 7:  # Jami 7 ta toza katak bor
+            win_amt = mg["payout"]
+            ud["balance"] += win_amt
+            ud["total_won"] += win_amt
+            DB["stats"]["total_prizes_given"] += win_amt
+            ud["mines_game"] = None
+            ud["games_played"] += 1
+            DB["stats"]["total_games"] += 1
+            save_db()
+            await q.edit_message_text(f"👑 *DAXSHATLI G'ALABA!* 👑\n\nMeydondagi hamma toza kataklarni topdingiz va *+{win_amt} so'm* yutdingiz!", parse_mode="Markdown",
+                                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]))
             return
         await show_mines(q, ud)
+        
     elif q.data == "m_cash":
         mg = ud["mines_game"]
-        if mg: ud["balance"] += mg["payout"]; ud["total_won"] += mg["payout"]; ud["mines_game"] = None; save_db()
-        await start(update, context)
+        if mg: 
+            win_amt = mg["payout"]
+            ud["balance"] += win_amt
+            ud["total_won"] += win_amt
+            DB["stats"]["total_prizes_given"] += win_amt
+            ud["mines_game"] = None
+            ud["games_played"] += 1
+            DB["stats"]["total_games"] += 1
+            save_db()
+            await q.edit_message_text(f"💰 *Aqlli naqd pul yechish!* \n\nBalansingizga *+{win_amt} so'm* qo'shildi uka!", parse_mode="Markdown",
+                                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💣 Yana o'ynash", callback_data="g_mines")], [InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]]))
 
-    # 🎰 3. SLOT
-    elif q.data == "g_slot":
-        if not is_vip and ud["tickets"] < 1: await q.edit_message_text("❌ Chipta yo'q!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎫 chipta", callback_data="b_ticket")]])); return
-        if not is_vip: ud["tickets"] -= 1
-        msg = await context.bot.send_dice(chat_id=q.message.chat_id, emoji="🎰")
-        val = msg.dice.value
-        if val in [1, 22, 43, 64]: win = 25000; txt = "👑 JEKPOT! 3ta bir xil! +25,000 so'm!"
-        elif val in [16, 32, 48]: win = 10000; txt = "🔥 Zo'r kombinatsiya! +10,000 so'm!"
-        else: win = 0; txt = "🥺 Omad kelmadi uka, qayta urinib ko'ring!"
-        ud["balance"] += win; ud["total_won"] += win; save_db()
-        await asyncio.sleep(2)
-        await context.bot.send_message(chat_id=q.message.chat_id, text=txt, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 Qayta", callback_data="g_slot")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
-
-    # 🪙 4. PvP TANGA
-    elif q.data == "g_pvp":
-        await q.edit_message_text("🪙 *PvP TANGA* uka\nGuruhda `/tanga SUMMA` deb yozib o'ynang! (Masalan: `/tanga 5000`)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
-
-    # 📦 5. KEYSLAR
+    # 📦 2. MAXFIY KEYSLAR MUKAMMAL TIZIM
     elif q.data == "g_cases":
-        txt = "📦 *MAXFIY KEYSLAR*\n\n1. 🎫 Bronze (4k) | 2. 💎 Silver (15k) | 3. 👑 Gold (40k)"
-        kb = [[InlineKeyboardButton("🎫 Bronze", callback_data="op_c_1"), InlineKeyboardButton("💎 Silver", callback_data="op_c_2"), InlineKeyboardButton("👑 Gold", callback_data="op_c_3")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]
-        await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
-    elif q.data.startswith("op_c_"):
+        txt = (
+            "📦 *FANTASY MAXFIY KEYSLAR TIZIMI*\n\n"
+            "Omadingizni daxshatli keyslarda sinab ko'ring, har bir keys ichidan srazu naqd pul chiqadi uka!\n\n"
+            "1. 🎫 *BRONZE KEYS* — Narxi: 4,000 so'm (Yutuq: 1,000 - 9,000 so'm)\n"
+            "2. 💎 *SILVER KEYS* — Narxi: 15,000 so'm (Yutuq: 5,000 - 35,000 so'm)\n"
+            "3. 👑 *GOLD SUPREME* — Narxi: 40,000 so'm (Yutuq: 15,000 - 120,000 so'm)"
+        )
+        kb = [
+            [InlineKeyboardButton("🎫 Bronze", callback_data="op_case_1"), 
+             InlineKeyboardButton("💎 Silver", callback_data="op_case_2"), 
+             InlineKeyboardButton("👑 Gold", callback_data="op_case_3")],
+            [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]
+        ]
+        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        
+    elif q.data.startswith("op_case_"):
         ctype = q.data.split("_")[2]
-        cost, p_min, p_max = (4000, 1000, 8000) if ctype=="1" else (15000, 5000, 30000) if ctype=="2" else (40000, 15000, 100000)
-        if ud["balance"] < cost: await q.edit_message_text("❌ Pul kam!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="g_cases")]])); return
-        ud["balance"] -= cost; p_win = random.randint(p_min, p_max); ud["balance"] += p_win; ud["total_won"] += p_win; save_db()
-        await q.edit_message_text(f"📦 Keysdan *+{p_win} so'm* naqd pul chiqdi uka!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📦 Yana", callback_data="g_cases")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+        cost, p_min, p_max = (4000, 1000, 9000) if ctype == "1" else (15000, 5000, 35000) if ctype == "2" else (40000, 15000, 120000)
+        
+        if ud["balance"] < cost: 
+            await q.edit_message_text("❌ Balansda mablag' yetarli emas uka!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Keyslarga", callback_data="g_cases")]]))
+            return
+            
+        ud["balance"] -= cost
+        p_win = random.randint(p_min, p_max)
+        ud["balance"] += p_win
+        ud["total_won"] += p_win
+        DB["stats"]["total_prizes_given"] += p_win
+        save_db()
+        
+        await q.edit_message_text(f"📦 Keys daxshatli ochildi! \n\nIchidan daxshatli *+{p_win} so'm* naqd pul chiqdi uka! 🎉", parse_mode="Markdown", 
+                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📦 Yana ochish", callback_data="g_cases")], [InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]))
 
-    elif q.data == "withdraw":
-        await q.edit_message_text(f"💳 *PUL YECHISH*\n\nID: `{uid}`\nBalans: {ud['balance']} so'm\nAdminga yozing 👇", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👑 Admin", url="https://t.me/shox_admin")], [InlineKeyboardButton("⬅️", callback_data="to_main")]]))
-    elif q.data == "admin" and uid == ADMIN_ID:
-        await q.edit_message_text(f"👑 Admin panel\n`/plus ID PUL` | `/setprice NARX`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+    # 👑 3. ADMIN PANEL - DAXSHATLI FANTAZIYALAR BILAN YANGILANDI
+    elif q.data == "admin_dashboard" and uid == ADMIN_ID:
+        total_balance = sum(u.get("balance", 0) for u in DB["users"].values())
+        txt = (
+            f"👑 *SHOX SUPREME BOSS PANEL v3.0* 👑\n\n"
+            f"👤 Jami a'zolar: *{len(DB['users'])} ta*\n"
+            f"🕹 Jami o'ynalgan o'yinlar: *{DB['stats']['total_games']} marta*\n"
+            f"💰 Umumiy tarqatilgan pullar: *{DB['stats']['total_prizes_given']} so'm*\n"
+            f"💳 Botdagi jami pullar aylanmasi: *{total_balance} so'm*\n\n"
+            f"⚙️ *Boss super-fanta buyruqlari:*\n"
+            f"🔹 `/plus ID PUL` — Kimningdir balansiga naqd pul urish\n"
+            f"🔹 `/minus ID PUL` — Kimgadir jarima solib pulini ayirish\n"
+            f"🔹 `/give_ticket ID SONI` — Tekin chiptalar berish\n"
+            f"🔹 `/create_promo PUL` — Universal promokod yaratish"
+        )
+        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
 
 async def show_mines(q, ud):
-    mg = ud["mines_game"]; kb = []; r = []
+    mg = ud["mines_game"]
+    kb = []; r = []
     for i in range(9):
-        em = "💥" if (mg["revealed"][i] and mg["grid"][i]=="mine") else "💵" if mg["revealed"][i] else "📦"
-        r.append(InlineKeyboardButton(em, callback_data="m_dn" if mg["revealed"][i] else f"m_clk_{i}"))
-        if len(r) == 3: kb.append(r); r = []
-    kb.append([InlineKeyboardButton(f"💰 Cashout ({mg['payout']})", callback_data="m_cash")])
-    await q.edit_message_text(f"💣 MINES: Qadam {mg['step']}/7 | Yutuq: {mg['payout']} so'm", reply_markup=InlineKeyboardMarkup(kb))
-
-# 🪙 PvP TANGA GURUH SYSTEM
-async def pvp_tanga_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("❌ Faqat guruhda ishlaydi uka!")
-        return
-    uid = update.effective_user.id; ud = check_user(uid, update.effective_user.first_name)
-    try:
-        summa = int(context.args[0])
-        if ud["balance"] < summa or summa < 1000: await update.message.reply_text("❌ Hisobda pul kam!"); return
-        context.bot_data[f"pvp_{update.message.message_id}"] = {"p1": uid, "sum": summa, "p1_name": ud["name"]}
-        await update.message.reply_text(f"🔥 *PvP TANGA!* \n👤 {ud['name']} {summa} so'm tikdi uka!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🪙 Qo'shilish", callback_data=f"j_pvp_{update.message.message_id}")]]))
-    except: await update.message.reply_text("⚠️ `/tanga 5000` deb yozing.")
-
-async def pvp_callback_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; uid = q.from_user.id; ud = check_user(uid)
-    if not q.data.startswith("j_pvp_"): return
-    mid = q.data.split("_")[2]; g = context.bot_data.get(f"pvp_{mid}")
-    if not g: await q.answer("❌ O'yin tugagan!"); return
-    if g["p1"] == uid: await q.answer("❌ O'zingiz bilan o'ynolmaysiz!", show_alert=True); return
-    if ud["balance"] < g["sum"]: await q.answer("❌ Pul yetarli emas!", show_alert=True); return
+        if mg["revealed"][i]:
+            em = "💥" if mg["grid"][i] == "mine" else "💵"
+            r.append(InlineKeyboardButton(em, callback_data="m_done"))
+        else:
+            r.append(InlineKeyboardButton("📦", callback_data=f"m_clk_{i}"))
+        if len(r) == 3: 
+            kb.append(r); r = []
+            
+    kb.append([InlineKeyboardButton(f"💰 Naqd Cashout ({mg['payout']} so'm)", callback_data="m_cash")])
+    kb.append([InlineKeyboardButton("⬅️ Taslim bo'lish (Chiqish)", callback_data="to_main")])
     
-    p1, p2 = g["p1"], uid; ud1, ud2 = check_user(p1), check_user(p2)
-    ud1["balance"] -= g["sum"]; ud2["balance"] -= g["sum"]
-    
-    win_id = random.choice([p1, p2])
-    w_name = ud1["name"] if win_id == p1 else ud2["name"]
-    pool = int(g["sum"] * 2 * 0.9) # 10% Shox admin komissiyasi
-    
-    if win_id == p1: ud1["balance"] += pool; ud1["total_won"] += pool
-    else: ud2["balance"] += pool; ud2["total_won"] += pool
-    del context.bot_data[f"pvp_{mid}"]; save_db()
-    await q.edit_message_text(f"🪙 Tanga aylandi! \n👑 G'olib: *{w_name}*!\n💰 Safi Yutuq: *{pool} so'm*", parse_mode="Markdown")
+    txt = (
+        f"💣 *MINES MULTI-TIZIMI* 💣\n\n"
+        f"Muvaffaqiyatli qadam: *{mg['step']} / 7*\n"
+        f"💵 Hozir to'xtatsangiz yutuq: *{mg['payout']} so'm*\n\n"
+        f"Keyingi katak yutug'i yanada daxshatli ko'payadi! Diqqat qiling uka!"
+    )
+    await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-# 💬 AQLLI SEVGI VA ROL FILTR CHAT MESH_HANDLER
+# 💬 FOYDALANUVCHIDAN PROMOKOD QABUL QILISH
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type in ["group", "supergroup"]: return
-    uid = update.effective_user.id; ud = check_user(uid); text = update.message.text.strip()
-    tm = time.time()
+    uid = update.effective_user.id
+    ud = check_user(uid)
+    text = update.message.text.strip().upper()
     
-    # Promokod tizimi
-    if text.upper() in DB["promocodes"]:
-        val = DB["promocodes"][text.upper()]; ud["balance"] += val; del DB["promocodes"][text.upper()]; save_db()
-        await update.message.reply_text(f"🎁 Promokod active! +{val} so'm qo'shildi!"); return
-        
-    # SEVISHGANLAR ROLI VA VAQT TEKSHIRUVI (Rasm xabari!)
-    if ud["chat_until"] < tm:
-        price = DB["settings"]["chat_hour_price"]
-        txt = (
-            f"❌ *Vaqtingiz tugadi begim!* 🥺\n\n"
-            f"Men bilan sevishganlar rolida suhbatni daxshatli davom ettirish uchun yana 1 soatlik vaqt sotib oling uka.\n"
-            f"Narxi: {price} so'm. Balans: {ud['balance']} so'm.\n"
-            f"Sotib olish uchun qayta /start bosing."
-        )
-        kb = [[InlineKeyboardButton("🔒 1 soat sotib olish", callback_data="buy_chat_hour")], [InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]
-        await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    if text in DB["promocodes"]:
+        val = DB["promocodes"][text]
+        ud["balance"] += val
+        del DB["promocodes"][text]
+        save_db()
+        await update.message.reply_text(f"🎁 *Daxshatli Fantaziya Omad!* Promokod qabul bo'ldi. Balansga *+{val} so'm* qo'shildi uka!")
         return
+        
+    await update.message.reply_text("🤖 O'yinlarni daxshatli o'ynash uchun pastdagi /start buyrug'ini bosing uka!")
 
-    # Vaqti bo'lsa, daxshatli sevgi frazalarini yuboradi
-    await update.message.reply_text("Hozir, 2 minut... ⏳")
-    await asyncio.sleep(1)
-    await update.message.reply_text(random.choice(LOVE_PHRASES))
-
-async def a_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 👑 ADMIN BUYRUQLARI TIZIMI
+async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        t, v = int(context.args[0]), int(context.args[1]); DB["users"][t]["balance"] += v; save_db()
-        await update.message.reply_text("✅ Balans to'ldirildi uka!")
+        t_id, val = int(context.args[0]), int(context.args[1])
+        if t_id in DB["users"]:
+            DB["users"][t_id]["balance"] += val
+            save_db()
+            await update.message.reply_text(f"✅ `ID: {t_id}` balansiga *{val} so'm* daxshatli qo'shildi!")
     except: pass
 
-async def a_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        v = int(context.args[0]); DB["settings"]["chat_hour_price"] = v; save_db()
-        await update.message.reply_text(f"⚙️ Soatlik suhbat narxi {v} so'mga o'zgardi!")
+        t_id, val = int(context.args[0]), int(context.args[1])
+        if t_id in DB["users"]:
+            DB["users"][t_id]["balance"] = max(0, DB["users"][t_id]["balance"] - val)
+            save_db()
+            await update.message.reply_text(f"📉 `ID: {t_id}` hisobidan *{val} so'm* chegirib tashlandi.")
     except: pass
 
+async def admin_give_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    try:
+        t_id, count = int(context.args[0]), int(context.args[1])
+        if t_id in DB["users"]:
+            DB["users"][t_id]["tickets"] += count
+            save_db()
+            await update.message.reply_text(f"🎫 `ID: {t_id}` profiliga *{count} ta* tekin chipta sovg'a qilindi!")
+    except: pass
+
+async def admin_create_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    try:
+        val = int(context.args[0])
+        code = "SHOX-" + "".join(random.choices(string.digits, k=5))
+        DB["promocodes"][code] = val
+        save_db()
+        await update.message.reply_text(f"🎁 *Yangi Fantastik Promokod yaratildi:* `{code}`\n💰 Qiymati: *{val} so'm*")
+    except: pass
+
+# 🌐 FLASK SERVER FOR RENDER
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Love & Mega Games Platform Online!"
-def run_flask(): app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+def home(): return "Supreme Multi Games Bot Platform Online!"
+
+def run_flask(): 
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
 async def main_bot():
     load_db()
     bot_app = Application.builder().token(TOKEN).build()
+    
     bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(CommandHandler("tanga", pvp_tanga_command))
-    bot_app.add_handler(CommandHandler("plus", a_plus))
-    bot_app.add_handler(CommandHandler("setprice", a_setprice))
-    bot_app.add_handler(CallbackQueryHandler(pvp_callback_join, pattern="^j_pvp_"))
+    bot_app.add_handler(CommandHandler("plus", admin_plus))
+    bot_app.add_handler(CommandHandler("minus", admin_minus))
+    bot_app.add_handler(CommandHandler("give_ticket", admin_give_ticket))
+    bot_app.add_handler(CommandHandler("create_promo", admin_create_promo))
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    
     await bot_app.initialize(); await bot_app.start(); await bot_app.updater.start_polling(drop_pending_updates=True)
     while True: await asyncio.sleep(3600)
 
@@ -258,5 +316,6 @@ if __name__ == '__main__':
     Thread(target=run_flask, daemon=True).start()
     try: loop = asyncio.get_event_loop()
     except RuntimeError: loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+    print("Bot daxshatli darajada tozalangan holda ishga tushdi...")
     loop.run_until_complete(main_bot())
-        
+            
