@@ -160,7 +160,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🎰 1-O'YIN: OMAD G'ILDRAK MENYUSI
     elif query.data == "game_wheel":
-        is_vip = ud["vip_until"] > current_time
         txt = f"🎰 *OMAD G'ILDIRAGI TIZIMI*\n\nHar bir aylantirish 1 ta chipta (4,000 so'm) yoki VIP talab qiladi. Eng kam yutuq: 1,000 so'm!\n\n🎫 Chiptalaringiz: {ud['tickets']} ta"
         kb = [
             [InlineKeyboardButton("🔄 G'ildirakni Aylantirish", callback_data="spin_wheel_action")],
@@ -197,11 +196,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton("🎰 Qayta aylantirish", callback_data="spin_wheel_action")], [InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]]
         await query.edit_message_text(result, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-    # 💣 2-O'YIN: MINA QIDIRUVCHI (MINES) TIZIMI (YANGI DETAL!)
+    # 💣 2-O'YIN: MINA QIDIRUVCHI (MINES) TIZIMI
     elif query.data == "game_mines":
-        is_vip = ud["vip_until"] > current_time
-        
-        # Agar o'yin hali boshlanmagan bo'lsa
         if not ud["mines_game"]:
             txt = (
                 f"💣 *MINA QIDIRUVCHI (MINES 3x3)*\n\n"
@@ -225,7 +221,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if not is_vip: ud["tickets"] -= 1
         
-        # 9 ta katakdan 2 tasiga tasodifiy mina qo'yish
         grid = ["clean"] * 9
         mina_indexes = random.sample(range(9), 2)
         for idx in mina_indexes:
@@ -235,13 +230,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "grid": grid,
             "revealed": [False] * 9,
             "current_bet": 4000,
-            "current_payout": 4000, # Boshlang'ich kafolatlangan pul
+            "current_payout": 4000,
             "step": 0
         }
         save_db()
         await show_mines_grid(query, ud)
 
-    # Katakchalarni bosganda ishlaydigan tizim
     elif query.data.startswith("mine_click_"):
         idx = int(query.data.split("_")[2])
         mg = ud["mines_game"]
@@ -250,7 +244,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         mg["revealed"][idx] = True
         
-        # Agar minaga (bomba) bosgan bo'lsa
         if mg["grid"][idx] == "mine":
             await query.edit_message_text(f"💥 *BOOOM! Minaga tushdingiz uka!* 💥\n\nHamma yig'ilgan yutuqlaringiz yonib ketdi. Xavotir olmang, keyingi safar daxshatli ehtiyotkor bo'lasiz!", parse_mode="Markdown",
                                           reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💣 Qayta o'ynash", callback_data="start_mines")], [InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]]))
@@ -260,13 +253,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_db()
             return
             
-        # Agar toza joyga bosgan bo'lsa, pul ko'payadi
         mg["step"] += 1
-        # Har bir toza qadamda pulga +2,500 so'm qo'shiladi!
         mg["current_payout"] += 2500 
         save_db()
         
-        # Agar hamma toza kataklar ochilgan bo'lsa (Jami 7 ta toza katak bor)
         if mg["step"] == 7:
             win_amount = mg["current_payout"]
             ud["balance"] += win_amount
@@ -282,7 +272,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await show_mines_grid(query, ud)
 
-    # Pullarni xavfsiz balansga yechib olish (O'yin ichida)
     elif query.data == "mines_cashout":
         mg = ud["mines_game"]
         if not mg: return
@@ -325,7 +314,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]))
 
-# 💣 MINES KATAKCHALARINI GENERATSIYA QILUVCHI DAHSHATLI APARAT
+# 💣 MINES GRID GENERATOR
 async def show_mines_grid(query, ud):
     mg = ud["mines_game"]
     buttons = []
@@ -333,21 +322,15 @@ async def show_mines_grid(query, ud):
     
     for i in range(9):
         if mg["revealed"][i]:
-            if mg["grid"][i] == "mine":
-                emoji = "💥"
-            else:
-                emoji = "💵"
-            # Ochilgan katakni qayta bosib bo'lmaydi
+            emoji = "💥" if mg["grid"][i] == "mine" else "💵"
             row.append(InlineKeyboardButton(emoji, callback_data="mine_already_done"))
         else:
-            # Berkitilgan katakcha
             row.append(InlineKeyboardButton("📦", callback_data=f"mine_click_{i}"))
             
         if len(row) == 3:
             buttons.append(row)
             row = []
             
-    # Pulni olish va chiqib ketish tugmalari
     buttons.append([InlineKeyboardButton(f"💰 Pulni yechib olish ({mg['current_payout']} so'm)", callback_data="mines_cashout")])
     buttons.append([InlineKeyboardButton("⬅️ Taslim bo'lish (Chiqish)", callback_data="to_main")])
     
@@ -411,4 +394,26 @@ async def admin_give_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        
+        val = int(context.args[0])
+        DB["settings"]["vip_price"] = val
+        save_db()
+        await update.message.reply_text(f"⚙️ VIP obuna narxi yangilandi: *{val} so'm*")
+    except: pass
+
+async def admin_genprom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    try:
+        val = int(context.args[0])
+        code = "OMAD-" + "".join(random.choices(string.digits, k=5))
+        DB["promocodes"][code] = val
+        save_db()
+        await update.message.reply_text(f"🎫 *Yangi universal Promokod yaratildi:* `{code}`\n💰 Qiymati: *{val} so'm*")
+    except: pass
+
+# 🌐 FLASK WEB SERVER (RENDER)
+app = Flask(__name__)
+@app.route('/')
+def home(): return "Mega Games Multi-System Platform Bot Onlayn!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000)
