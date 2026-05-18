@@ -1,28 +1,26 @@
 import os, random, asyncio, urllib.request, json, time
-from threading import Thread
-from flask import Flask
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# FLASK SERVER (RENDER UCHUN)
 server = Flask('')
+
 @server.route('/')
-def home(): return "Casino Bot Muammosiz Aktiv!"
+def home(): 
+    return "Casino Bot Webhook orqali Aktiv!"
 
-def run_server():
-    port = int(os.environ.get("PORT", 8080))
-    server.run(host='0.0.0.0', port=port)
-
-# ASOSIY SOZLAMALAR (YANGI TOKEN BILAN)
+# ASOSIY SOZLAMALAR
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062  
 TARGET_GROUP = "@yzbedkslls" 
+URL = "https://mafia-bot-1-cfvs.onrender.com"  # Sizning Render havolangiz
 
 USER_DATA = {}
 ADMIN_STATE = {} 
 GAME_BET_STATE = {} 
 USER_STATE = {} 
 
-# MAKTAB SAVOLLARI RO'YXATI (9 TA)
 SCHOOL_QUESTIONS = [
     {"q": "O'zbekiston Respublikasi qachon mustaqillikka erishgan?", "o": ["1990-yil", "1991-yil", "1992-yil"], "a": "1991-yil"},
     {"q": "Amir Temur nechanchi yilda tug'ilgan?", "o": ["1336-yil", "1405-yil", "1342-yil"], "a": "1336-yil"},
@@ -34,6 +32,16 @@ SCHOOL_QUESTIONS = [
     {"q": "O'zbek tilida nechta unli tovush bor?", "o": ["5 ta", "6 ta", "10 ta"], "a": "6 ta"},
     {"q": "Yer quyosh tizimidagi nechanchi sayyora?", "o": ["2-sayyora", "3-sayyora", "4-sayyora"], "a": "3-sayyora"}
 ]
+
+# TELEGRAM APPLICATION GLOBAL OB'EKTI
+app = None
+
+@server.route('/' + TOKEN, methods=['POST'])
+def webhook():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), app.bot)
+        asyncio.run(app.process_update(update))
+    return 'ok'
 
 def get_user(user_id, name):
     if user_id not in USER_DATA:
@@ -354,13 +362,19 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await update.message.reply_text("❌ Xato! Namuna: `7920504062 +10` yoki `7920504062 5000`")
 
-def main():
-    Thread(target=run_server).start()
+async def init_webhook():
+    global app
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
-    app.run_polling(drop_pending_updates=True)
+    
+    await app.initialize()
+    await app.bot.set_webhook(url=f"{URL}/{TOKEN}")
+    print("Webhook muvaffaqiyatli o'rnatildi!")
 
-if __name__ == '__main__': main()
-        
+if __name__ == '__main__':
+    asyncio.run(init_webhook())
+    port = int(os.environ.get("PORT", 8080))
+    server.run(host='0.0.0.0', port=port)
+    
