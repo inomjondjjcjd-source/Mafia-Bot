@@ -34,7 +34,7 @@ USER_DATA = {}
 PROMO_CODES = {}  
 
 SYSTEM_SETTINGS = {
-    "bot_win_rate": 70  # Standart holatda bot 70% yutadi
+    "bot_win_rate": 70  
 }
 
 def load_data():
@@ -121,9 +121,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "personal_cabinet":
         status = "👑 VIP Admin" if user_id == MAIN_ADMIN else "🎲 Oddiy O'yinchi"
-        p_rate = ud.get("personal_win_rate", None)
-        rate_text = f"Bot {p_rate}% yutadi (Maxsus)" if p_rate is not None else f"Bot {SYSTEM_SETTINGS['bot_win_rate']}% yutadi (Umumiy)"
         
+        # 👑 FOIZ KO'RINADIGAN JOY MULTAQO O'ZGARTIRILDI:
+        # Endi foydalanuvchiga shaxsiy yoki umumiy foiz aslo ko'rsatilmaydi, hammasida faqat chiroyli "🎲 Random (Provably Fair)" yozuvi chiqadi!
         text = (
             "🗄 *Foydalanuvchi Shaxsiy Profili*\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
@@ -132,7 +132,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Status: {status}\n\n"
             f"💰 Balans: *{ud['money']:,} UZS*\n"
             f"📊 Jami o'yinlar: {ud['games_played']} ta\n"
-            f"⚙️ Tizim algoritmi: *{rate_text}*\n"
+            f"⚙️ Tizim algoritmi: *🎲 Random (Provably Fair)*\n"
             "━━━━━━━━━━━━━━━━━━━━"
         )
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard)
@@ -202,7 +202,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]
         ])
         current_rate = SYSTEM_SETTINGS.get("bot_win_rate", 70)
-        await query.edit_message_text(f"👑 *Admin Panel*\n\n📈 Umumiy algoritm: Bot {current_rate}% yutadi.\n\nAmalni tanlang:", reply_markup=akb)
+        await query.edit_message_text(f"👑 *Admin Panel*\n\n📈 Admin ko'zi uchun umumiy foiz: Bot {current_rate}% yutadi.\n\nAmalni tanlang:", reply_markup=akb)
 
     elif query.data == "adm_set_personal_rate" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_personal_rate"
@@ -230,7 +230,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ud = get_user_data(user_id)
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
-    # 🎯 SHAXSIY FOIZNI TO'G'RI SOZLASH
     if user_id == MAIN_ADMIN and ud["state"] == "wait_personal_rate":
         try:
             target_id, rate_val = text.split()
@@ -242,7 +241,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_ud["personal_win_rate"] = rate_val
             ud["state"] = None
             save_data()
-            await update.message.reply_text(f"✅ Tayyor! `ID: {target_id}` uchun Botning yutish ehtimoli *{rate_val}%* qilindi!", parse_mode="Markdown", reply_markup=back_keyboard)
+            await update.message.reply_text(f"✅ Tayyor! `ID: {target_id}` uchun Botning yutish ehtimoli *{rate_val}%* qilindi! (Bu foiz shaxsiy kabinetda yashirin qoldi)", parse_mode="Markdown", reply_markup=back_keyboard)
         except:
             await update.message.reply_text("❌ Xato! Namuna: `7920504062 85`", reply_markup=back_keyboard)
         return
@@ -309,7 +308,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Noto'g'ri. Javob: `{correct_ans}`", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # 🎰 MUKAMMAL 100% ANIQ ISHLOVCHI O'YIN TIKISH ALGORITMI
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
         if not text.isdigit():
@@ -329,22 +327,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["state"] = None
         ud["games_played"] += 1
 
-        # 🎯 BOTNING YUTISH CHANSI (FOIZI) NING ANIQ MATEMATIKASI
         if ud.get("personal_win_rate") is not None:
             bot_win_percent = ud["personal_win_rate"]
         else:
             bot_win_percent = SYSTEM_SETTINGS.get("bot_win_rate", 70)
 
-        # 1 dan 100 gacha tasodifiy son olinadi
         roll = random.randint(1, 100)
         
-        # Agar yozilgan foiz roll dan katta yoki teng bo'lsa -> BOT YUTADI. Foydalanuvchi yutqazadi!
         if roll <= bot_win_percent:
             is_user_win = False
         else:
             is_user_win = True
 
-        # Yirik tikishlar nazorati (3000 so'mdan baland tiksa srazu bot yutadi)
         if bet > 3000:
             is_user_win = False
 
@@ -377,9 +371,9 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot 100% aniqlikda ishga tushdi...")
+    print("Bot individual sozlamalar tizimi bilan tayyor...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-    
+                      
