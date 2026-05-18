@@ -8,29 +8,28 @@ import random
 from threading import Thread
 from flask import Flask
 
-# RENDER UCHUN ASINXRON KUTUBXONALARNI TEKSHIRISH
+# 📦 KUTUBXONALARNI TO'G'RI TEKSHIRISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters, Defaults
+    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "Flask", "cryptography"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "Flask"])
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters, Defaults
+    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-# SERVER PORTINI SOZLASH (RENDER UCHUN)
+# 🌐 RENDER UCHUN FLASK SERVER
 server = Flask('')
 @server.route('/')
-def home(): return "Bot Asinxron Rejimda Aktiv!"
+def home(): return "Bot Muammosiz Aktiv!"
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY PARAMETRLAR (TOKENDI O'ZGARTIRING AGAR YANGI BO'LSA)
+# 🔑 PARAMETRLAR
 TOKEN = "8930327976:AAE3sgNPEJRoZROhACHK7M4s-THpmWvNym8"
 MAIN_ADMIN = 7920504062
 
-# FOYDALANUVCHILAR BAZASI
 USER_DATA = {}
 
 def get_user_data(user_id):
@@ -47,7 +46,7 @@ def get_user_data(user_id):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# 🎰 SIZ AYTGAN ASOSIY KATTA MENYU (HAMMA TUGMALAR SHU YERDA)
+# 🎰 KAZINO TUGMALARI
 def get_main_menu_keyboard(user_id):
     keyboard = [
         [
@@ -71,7 +70,7 @@ def get_main_menu_keyboard(user_id):
         keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
     return InlineKeyboardMarkup(keyboard)
 
-# /START BUYRUG'I (ASINXRON FIXED)
+# 🚀 START BUYRUG'I
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = get_user_data(user_id)
@@ -83,7 +82,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-# TUGMALAR BOSILGANDA (ASINXRON FIXED)
+# 📊 TUGMALAR ISHLOVCHISI
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -142,7 +141,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data in ["earn_money", "deposit_money", "earn_fast"]:
         await query.edit_message_text("⏳ Bu bo'lim hozircha sozlanmoqda, tez kunda aktivlashadi!", reply_markup=back_keyboard)
 
-# MATNLI XABARLAR VA O'YINLAR (ASINXRON FIXED)
+# 💬 XABARLAR VA O'YIN MANTIQI
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
@@ -208,34 +207,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 res += "🤝 *Durang!* Pul qaytarildi."
             await update.message.reply_text(res, parse_mode="Markdown", reply_markup=back_keyboard)
 
+# 🏁 ASOSIY ISHGA TUSHIRISH QISMI
 def main():
-    # RENDER UCHUN ASOSIY RUN LOOP FIXED (CRITICAL FOR RENDER)
-    print("Bot asinxron tizimga o'tkazilmoqda...")
+    Thread(target=run_server).start()
+    
+    # Eskidan qolib ketgan webhooklarni butkul tozalash va to'qnashuvni yo'qotish
+    app = Application.builder().token(TOKEN).build()
+    
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
-    # VEB-SERVERNI ALOHIDA POTOKDA QO'SHISH (UXLAB QOLMASLIGI UCHUN)
-    Thread(target=run_server).start()
-    
-    # ⚡️ WEBHOOK TOZALASH (ESKI BLOCKNI O'CHIRISH)
-    app = Application.builder().token(TOKEN).build()
-    
-    # Asinxron delete_webhook ni sinxron main da chaqirish
-    app.bot.delete_webhook(drop_pending_updates=True)
+        
+    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
     time.sleep(1)
     
-    # HANDLERLARNI QO'SHISH
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot barcha funksiyalari bilan to'liq ishga tushdi...")
-    # ASINXRON POLLING NI ISHGA TUSHIRISH (MAIN REJIMIDAGI)
-    app.run_polling()
+    print("Bot muvaffaqiyatli ishga tushdi...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-            
+        
