@@ -37,9 +37,8 @@ DATA_FILE = "user_database.json"
 USER_DATA = {}
 PROMO_CODES = {}  
 
-# Standart sozlamalar (Agar faylda bo'lmasa, bot 70% bot yutadigan qilib ochiladi)
 SYSTEM_SETTINGS = {
-    "bot_win_rate": 70
+    "bot_win_rate": 70  # Umumiy standart foiz
 }
 
 def load_data():
@@ -48,12 +47,11 @@ def load_data():
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-                # Tizim sozlamalarini ajratib olamiz
                 if "SYSTEM_SETTINGS" in loaded:
                     SYSTEM_SETTINGS = loaded["SYSTEM_SETTINGS"]
                     del loaded["SYSTEM_SETTINGS"]
                 USER_DATA = {int(k): v for k, v in loaded.items()}
-                print("Ma'lumotlar muvaffaqiyatli yuklandi.")
+                print("Ma'lumotlar yuklandi.")
         except Exception as e:
             print(f"Faylni o'qishda xato: {e}")
             USER_DATA = {}
@@ -88,7 +86,8 @@ def get_user_data(user_id):
             "card_number": None,
             "full_name": None,
             "history_wins": 0,
-            "history_losses": 0
+            "history_losses": 0,
+            "personal_win_rate": None  # Maxsus foiz (None bo'lsa umumiy foiz ishlaydi)
         }
         save_data()
     if user_id == MAIN_ADMIN:
@@ -152,6 +151,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "personal_cabinet":
         status = "👑 VIP Admin" if user_id == MAIN_ADMIN else "🎲 Oddiy O'yinchi"
         win_rate = 0 if (ud["history_wins"]+ud["history_losses"]) == 0 else int((ud["history_wins"]/(ud["history_wins"]+ud["history_losses"]))*100)
+        p_rate = ud.get("personal_win_rate", None)
+        rate_text = f"{p_rate}% (Sizga moslangan)" if p_rate is not None else f"{SYSTEM_SETTINGS['bot_win_rate']}% (Umumiy)"
+        
         text = (
             "🗄 *Foydalanuvchi Shaxsiy Profili*\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
@@ -160,7 +162,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Status: {status}\n\n"
             f"💰 Naqd Balans: *{ud['money']:,} UZS*\n"
             f"📊 Jami o'yinlaringiz: {ud['games_played']} ta\n"
-            f"📈 Omad darajasi (WinRate): {win_rate}%\n"
+            f"📉 Botning yutish kuchi: *{rate_text}*\n"
             f"❓ Bugungi savollar limiti: {ud['questions_left']}/12 ta\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "Yutuqlarni silliq yechib olishda davom eting!"
@@ -234,29 +236,35 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "admin_panel" and user_id == MAIN_ADMIN:
         akb = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕/➖ Foydalanuvchi Balansi", callback_data="adm_change_balance")],
-            [InlineKeyboardButton("🎲 Imkoniyatni Sozlash", callback_data="adm_set_winrate")],
+            [InlineKeyboardButton("👤 Shaxsiy Foizni Sozlash", callback_data="adm_set_personal_rate")],
+            [InlineKeyboardButton("⚙️ Umumiy Foizni Sozlash", callback_data="adm_set_winrate")],
             [InlineKeyboardButton("➕ Promokod Yaratish", callback_data="adm_create_promo")],
             [InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]
         ])
         current_rate = SYSTEM_SETTINGS.get("bot_win_rate", 70)
-        await query.edit_message_text(f"👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\n📈 Hozirgi sozlama: *Bot {current_rate}% holatda yutadi*.\n\nKerakli amalni tanlang:", parse_mode="Markdown", reply_markup=akb)
+        await query.edit_message_text(f"👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\n📈 Umumiy sozlama: *Bot {current_rate}% holatda yutadi*.\n\nKerakli amalni tanlang:", parse_mode="Markdown", reply_markup=akb)
 
-    # Admin: Winrate o'zgartirish tugmasi bosilganda
+    # Admin: Maxsus foydalanuvchi foizini o'zgartirish tugmasi
+    elif query.data == "adm_set_personal_rate" and user_id == MAIN_ADMIN:
+        ud["state"] = "wait_personal_rate"
+        save_data()
+        await query.edit_message_text("👤 *Ma'lum bir kishining yutish ehtimolini sozlash*\n\nID raqami va foizini mana bu formatda yozib yuboring:\n`ID FOIZ`\n\n*Masalan:* `12345678 90` (Ushbu ID egasi o'ynaganda bot *90%* holatda yutib oladi)", parse_mode="Markdown")
+
     elif query.data == "adm_set_winrate" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_winrate_val"
         save_data()
         current_rate = SYSTEM_SETTINGS.get("bot_win_rate", 70)
-        await query.edit_message_text(f"🎲 *Botning yutish ehtimolini foizda kiriting:*\n\nHozirgi holat: `{current_rate}%`\nFaqat `0` dan `100` gacha bo'lgan butun son yozib yuboring.\n\n*Masalan:* `80` deb yozsangiz, bot 80% o'yinlarda odamlarni yutqaztiradi.", parse_mode="Markdown")
+        await query.edit_message_text(f"⚙️ *Botning umumiy yutish ehtimolini kiriting (Hamma uchun):*\n\nHozirgi holat: `{current_rate}%`", parse_mode="Markdown")
 
     elif query.data == "adm_change_balance" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_balance_mod"
         save_data()
-        await query.edit_message_text("💰 *Foydalanuvchi balansini boshqarish*\n\nPul qo'shish: `ID +miqdor`\nPul ayirish: `ID -miqdor` ko'rinishida yozing.\n\n*Masalan:* `7920504062 -15000`", parse_mode="Markdown")
+        await query.edit_message_text("💰 *Foydalanuvchi balansini boshqarish*\n\nPul qo'shish: `ID +miqdor`\nPul ayirish: `ID -miqdor` ko'rinishida yozing.", parse_mode="Markdown")
 
     elif query.data == "adm_create_promo" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_promo_creation"
         save_data()
-        await update.effective_message.reply_text("✍️ Yangi promokod va narxini yozing:\n\n`PROMO5000 5000`")
+        await query.edit_message_text("✍️ Yangi promokod va narxini yozing:\n\n`PROMO5000 5000`")
 
 # 💬 MESSAGES
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -265,17 +273,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ud = get_user_data(user_id)
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
-    # 🛑 ADMIN: BOTNING YUTISH FOIZINI O'ZGARTIRISH
+    # 🛑 ADMIN: MA'LUM BIR KISHINING FOIZINI SOZLASH (YANGI FUNKSIYA)
+    if user_id == MAIN_ADMIN and ud["state"] == "wait_personal_rate":
+        try:
+            target_id, rate_val = text.split()
+            target_id = int(target_id)
+            rate_val = int(rate_val)
+            
+            if not (0 <= rate_val <= 100):
+                await update.message.reply_text("❌ Foiz faqat 0 va 100 oralig'ida bo'lishi shart!")
+                return
+                
+            target_ud = get_user_data(target_id)
+            target_ud["personal_win_rate"] = rate_val
+            ud["state"] = None
+            save_data() # Faylga yozamiz
+            await update.message.reply_text(f"✅ Tayyor! `ID: {target_id}` foydalanuvchisi uchun botning yutish kuchi roppa-rosa *{rate_val}%* qilib muhrlandi!", parse_mode="Markdown", reply_markup=back_keyboard)
+        except:
+            await update.message.reply_text("❌ Xato kiritish formati! Namuna: `7920504062 85`", reply_markup=back_keyboard)
+        return
+
+    # ADMIN: UMUMIY FOIZNI O'ZGARTIRISH
     if user_id == MAIN_ADMIN and ud["state"] == "wait_winrate_val":
         if not text.isdigit() or not (0 <= int(text) <= 100):
-            await update.message.reply_text("❌ Iltimos faqat 0 dan 100 gacha bo'lgan butun son kiriting!")
+            await update.message.reply_text("❌ Iltimos faqat 0 dan 100 gacha son kiriting!")
             return
-        
-        new_rate = int(text)
-        SYSTEM_SETTINGS["bot_win_rate"] = new_rate
+        SYSTEM_SETTINGS["bot_win_rate"] = int(text)
         ud["state"] = None
-        save_data() # Yangi foiz darhol JSON faylga yoziladi!
-        await update.message.reply_text(f"🎯 *Muvaffaqiyatli o'zgartirildi!*\n\nEndi bot o'yinlarda roppa-rosa *{new_rate}%* ehtimollik bilan g'alaba qozonadi uka!", parse_mode="Markdown", reply_markup=back_keyboard)
+        save_data()
+        await update.message.reply_text(f"🎯 *Umumiy foiz o'zgardi!* Endi bot hammasi uchun *{text}%* kuchi bilan o'ynaydi.", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
     # ADMIN: BALANSNI O'ZGARTIRISH
@@ -288,12 +314,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if operation.startswith("+"):
                 amount = int(operation.replace("+", ""))
                 target_ud["money"] += amount
-                msg = f"✅ `ID: {target_id}` hisobiga *+{amount:,} so'm* muvaffaqiyatli qo'shildi!"
+                msg = f"✅ `ID: {target_id}` hisobiga *+{amount:,} so'm* qo'shildi!"
             elif operation.startswith("-"):
                 amount = int(operation.replace("-", ""))
                 target_ud["money"] -= amount
                 if target_ud["money"] < 0: target_ud["money"] = 0  
-                msg = f"🔥 `ID: {target_id}` hisobidan *-{amount:,} so'm* muvaffaqiyatli ayirib olindi!"
+                msg = f"🔥 `ID: {target_id}` hisobidan *-{amount:,} so'm* ayirildi!"
             else:
                 raise ValueError
                 
@@ -301,7 +327,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_data() 
             await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=back_keyboard)
         except:
-            await update.message.reply_text("❌ Xato kiritish! Namuna: `7920504062 -5000`", reply_markup=back_keyboard)
+            await update.message.reply_text("❌ Xato format. Namuna: `7920504062 -5000`", reply_markup=back_keyboard)
         return
 
     # Promokod yaratish
@@ -311,7 +337,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             PROMO_CODES[p_code.upper()] = int(p_val)
             ud["state"] = None
             save_data()
-            await update.message.reply_text(f"✅ Muaffaqiyatli! `{p_code.upper()}` yaratildi. Narxi: *{int(p_val):,} so'm*", parse_mode="Markdown", reply_markup=back_keyboard)
+            await update.message.reply_text(f"✅ Promokod `{p_code.upper()}` yaratildi ({int(p_val):,} so'm)", parse_mode="Markdown", reply_markup=back_keyboard)
         except:
             await update.message.reply_text("❌ Xato format.", reply_markup=back_keyboard)
         return
@@ -331,20 +357,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         correct_ans = SAVOLLAR_BAZASI[q_idx]['j']
         ud["questions_left"] -= 1
         ud["state"] = None
-        
-        if ud["questions_left"] == 0:
-            ud["last_quiz_time"] = time.time()
+        if ud["questions_left"] == 0: ud["last_quiz_time"] = time.time()
 
         if text == correct_ans:
             ud["money"] += 800
             save_data()
-            await update.message.reply_text(f"✅ To'g'ri javob! *+800 so'm* qo'shildi.", parse_mode="Markdown", reply_markup=back_keyboard)
+            await update.message.reply_text("✅ To'g'ri javob! *+800 so'm* qo'shildi.", parse_mode="Markdown", reply_markup=back_keyboard)
         else:
             save_data()
-            await update.message.reply_text(f"❌ Noto'g'ri! To'g'ri javob `{correct_ans}` edi.", parse_mode="Markdown", reply_markup=back_keyboard)
+            await update.message.reply_text(f"❌ Noto'g'ri! To'g'ri javob `{correct_ans}` edi.", parse_mode="Markdown", reply_keyboard=back_keyboard)
         return
 
-    # O'yin tikish (ADMIN PANEL FOIZIGA ASOSLANGAN REJIM)
+    # O'yin tikish (FOYDALANUVCHINING SHAXSIY FOIZIGA QARAYDIGAN MOSLASHUVCHAN REJIM)
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
         if not text.isdigit():
@@ -370,9 +394,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif ud["games_played"] <= 2:
             is_win = True  
         else:
-            # 🎯 ADMIN PANELDA BELGILANGAN FOIZ BU YERDA ISHLAYDI:
-            bot_chance = SYSTEM_SETTINGS.get("bot_win_rate", 70) / 100.0
-            is_win = random.random() > bot_chance 
+            # 🎯 SHAXSIY FOIZ ALGORITMI
+            # Agar foydalanuvchiga shaxsiy foiz qo'yilgan bo'lsa uni oladi, aks holda tizimning umumiy foizini oladi
+            if ud.get("personal_win_rate") is not None:
+                final_chance = ud["personal_win_rate"] / 100.0
+            else:
+                final_chance = SYSTEM_SETTINGS.get("bot_win_rate", 70) / 100.0
+                
+            is_win = random.random() > final_chance 
 
         if is_win:
             ud["money"] += (bet * 2)
@@ -405,9 +434,9 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot moslanuvchan tizim bilan muvaffaqiyatli yondi...")
+    print("Bot individual sozlamalar tizimi bilan tayyor...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-        
+            
