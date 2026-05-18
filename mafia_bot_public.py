@@ -2,29 +2,26 @@ import os
 import sys
 import subprocess
 import json
+import asyncio
+from flask import Flask
+from threading import Thread
 
 # 📦 KERAKLI KUTUBXONALARNI AVTO-O'RNATISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask"])
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# 🔑 NOLDAN YANGI SOZLAMALARINGIZ
+# 🔑 SOZLAMALAR
 TOKEN = "8303235336:AAEk3J42idbz1KcamIWPC2L3_IlROPeoadI"
-ADMIN_ID = 8086545587  # 👑 Sening aniq shaxsiy ID'ngiz (Endi bot xato bermaydi!)
+ADMIN_ID = 8086545587  # 👑 Sening aniq shaxsiy ID'ngiz
 DATA_FILE = "new_reaction_bot_db.json"
 
 # 📊 MA'LUMOTLAR BAZASI
-DB = {
-    "users": {},       
-    "promocodes": {},  
-    "settings": {
-        "service_price": 500  # 💰 Xizmat narxi: 500 so'm
-    }
-}
+DB = {"users": {}, "promocodes": {}, "settings": {"service_price": 500}}
 
 def load_db():
     global DB
@@ -46,13 +43,7 @@ def save_db():
 
 def check_user(user_id, name="Foydalanuvchi"):
     if user_id not in DB["users"]:
-        DB["users"][user_id] = {
-            "name": name,
-            "balance": 100,  # 🎁 Skrinshotingizdagidek yangi a'zoga 100 so'm bonus!
-            "channels": [],
-            "limit": 0,
-            "tarif": "Bepul"
-        }
+        DB["users"][user_id] = {"name": name, "balance": 100, "channels": [], "limit": 0, "tarif": "Bepul"}
         save_db()
     return DB["users"][user_id]
 
@@ -68,7 +59,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
     )
     
-    # Skrinshotingizdagi tugmalar tizimi
     buttons = [
         [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
         [InlineKeyboardButton("💰 Hisobni ko'rish", callback_data="view_balance"), InlineKeyboardButton("🛍 Yangi xizmatlar", callback_data="new_services")],
@@ -86,7 +76,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     ud = check_user(user_id)
     
-    # 1. REAKSIYALAR SOZLAMALARI
     if query.data == "reaction_settings":
         txt = (
             f"📣 *Reaksiyalarni ishlatish uchun avval botni kanal yoki guruhga qo'shishingiz kerak.*\n\n"
@@ -99,7 +88,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         
-    # 2. HISOBNI KO'RISH
     elif query.data == "view_balance":
         txt = (
             f"💳 *Hisobingiz haqida:*\n\n"
@@ -115,12 +103,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         
-    # 3. ORTGA QAYTISH
     elif query.data == "back_main":
         txt = (
             f"📣 *@ReaksiyauzBot — Kanal va Guruhlarga Reaksiya qo'shish boti!*\n\n"
-            f"✨ Endi siz ham o'z kanal yoki guruhingizdagi postlarga qulay va chiroyli Reaksiyalar qo'shishingiz mumkin.\n"
-            f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
+            f"👍❤️🔥 — xohlagancha emojilarni tanlang va obunachilaringizni faol qiling!"
         )
         buttons = [
             [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
@@ -131,34 +117,19 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_panel")])
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # 4. ULANGAN KANALLAR
-    elif query.data == "list_channels":
-        ch_list = ud["channels"]
-        if not ch_list:
-            txt = "❌ Siz hali birorta ham kanal ulamagansiz uka."
-        else:
-            txt = "📋 *Sizning ulangan kanallaringiz:*\n\n" + "\n".join([f"🔹 {ch}" for ch in ch_list])
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="reaction_settings")]]
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    # 👑 ADMIN PANEL INTERFEYSI
     elif query.data == "admin_panel" and user_id == ADMIN_ID:
         txt = (
             f"👑 *REAKSIYA BOT - SHOX PANELI*\n\n"
             f"👥 Jami a'zolar: *{len(DB['users'])} ta*\n"
             f"💰 Xizmat narxi: *{DB['settings']['service_price']} so'm*\n\n"
             f"Admin buyruqlari:\n"
-            f"🔹 `/plus ID PUL` - Foydalanuvchiga pul solish\n"
-            f"🔹 `/minus ID PUL` - Balansdan pul ayirish\n"
-            f"🔹 `/promo KOD SUMMA` - Yangi promokod yaratish\n"
-            f"🔹 `/setprice NARX` - Xizmat narxini o'zgartirish"
+            f"🔹 `/plus ID PUL`\n🔹 `/minus ID PUL`"
         )
         kb = [[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="back_main")]]
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-    # TEZKOR SHABLON TUGMALARI
-    elif query.data in ["add_channel", "del_channel", "new_services", "bot_guide", "get_gifts", "refill_balance"]:
-        txt = f"⚙️ Bu bo'lim loyihaning keyingi darsida to'liq ishga tushadi uka! Hozircha menyu strukturalari va balans tizimi daxshat ishlamoqda."
+    elif query.data in ["add_channel", "del_channel", "list_channels", "new_services", "bot_guide", "get_gifts", "refill_balance"]:
+        txt = f"⚙️ Bu bo'lim tez orada ishga tushadi uka! Hozircha menyu va balans tizimi daxshat ishlamoqda."
         kb = [[InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")]]
         await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -172,55 +143,48 @@ async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
             DB["users"][target_id]["balance"] += amount
             save_db()
             await update.message.reply_text(f"✅ `ID: {target_id}` balansiga *{amount} so'm* qo'shildi!")
-        else:
-            await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
-    except: await update.message.reply_text("Format: `/plus ID PUL`")
+    except: pass
 
-async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
-        if target_id in DB["users"]:
-            DB["users"][target_id]["balance"] -= amount
-            save_db()
-            await update.message.reply_text(f"✅ `ID: {target_id}` balansidan *{amount} so'm* ayrildi!")
-    except: await update.message.reply_text("Format: `/minus ID PUL`")
+# 🌐 RENDER PORTINI TINGLOVCHI FLASK SERVER
+app = Flask(__name__)
 
-async def admin_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        price = int(context.args[0])
-        DB["settings"]["service_price"] = price
-        save_db()
-        await update.message.reply_text(f"✅ Yangi xizmat narxi saqlandi: *{price} so'm*")
-    except: await update.message.reply_text("Format: `/setprice NARX`")
+@app.route('/')
+def home():
+    return "Bot is running daxshat!"
 
-async def admin_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        code = context.args[0].upper()
-        amount = int(context.args[1])
-        DB["promocodes"][code] = {"amount": amount, "used_by": []}
-        save_db()
-        await update.message.reply_text(f"🎁 Promokod yaratildi: `{code}` ({amount} so'm)")
-    except: await update.message.reply_text("Format: `/promo KOD SUMMA`")
+def run_flask():
+    # Render beradigan portni avtomatik oladi, bo'lmasa 10000 portda ishlaydi
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
-# 🚀 BOTNI ISHGA TUSHIRISH
-def main():
+# 🚀 BOTNI ASINXRON RUN QILISH
+async def main_bot():
     load_db()
     bot_app = Application.builder().token(TOKEN).build()
     
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("plus", admin_plus))
-    bot_app.add_handler(CommandHandler("minus", admin_minus))
-    bot_app.add_handler(CommandHandler("setprice", admin_setprice))
-    bot_app.add_handler(CommandHandler("promo", admin_promo))
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
     
-    print("Yangi Reaksiyalar Boti noldan daxshatli tarzda ishga tushdi...")
-    bot_app.run_polling(drop_pending_updates=True)
+    await bot_app.initialize()
+    await bot_app.start()
+    await bot_app.updater.start_polling(drop_pending_updates=True)
+    
+    # Render o'chib qolmasligi uchun cheksiz sikl
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == '__main__':
-    main()
+    # 1. Flask serverni alohida oqimda yoqamiz (Render o'chib qolmasligi uchun)
+    Thread(target=run_flask, daemon=True).start()
+    
+    # 2. Asosiy event loopni xatosiz ishga tushiramiz
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
+    print("Yangi asinxron kod ishga tushdi...")
+    loop.run_until_complete(main_bot())
+    
