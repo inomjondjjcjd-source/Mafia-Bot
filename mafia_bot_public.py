@@ -8,7 +8,7 @@ import random
 from threading import Thread
 from flask import Flask
 
-# 📦 KUTUBXONALARNI TO'G'RI TEKSHIRISH
+# 📦 KUTUBXONALARNI TO'G'RI TEKSHIRISH VA O'RNATISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -17,7 +17,7 @@ except ImportError:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-# 🌐 RENDER UCHUN FLASK SERVER
+# 🌐 RENDER UCHUN FLASK SERVER (BOT UXLAB QOLMASLIGI UCHUN)
 server = Flask('')
 @server.route('/')
 def home(): return "Bot Muammosiz Aktiv!"
@@ -26,8 +26,8 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# 🔑 PARAMETRLAR
-TOKEN = "8930327976:AAE3sgNPEJRoZROhACHK7M4s-THpmWvNym8"
+# 🔑 PARAMETRLAR (SHU YERGA BOTFATHER BERGAN YANGI TOKENDI QO'YING)
+TOKEN = "8844314869:AAEDBVoZKGVS6-5oOOV9_jXXmNY3znLbhH8"
 MAIN_ADMIN = 7920504062
 
 USER_DATA = {}
@@ -46,7 +46,7 @@ def get_user_data(user_id):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# 🎰 KAZINO TUGMALARI
+# 🎰 KAZINO TUGMALARI MATRIXI
 def get_main_menu_keyboard(user_id):
     keyboard = [
         [
@@ -207,11 +207,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 res += "🤝 *Durang!* Pul qaytarildi."
             await update.message.reply_text(res, parse_mode="Markdown", reply_markup=back_keyboard)
 
-# 🏁 ASOSIY ISHGA TUSHIRISH QISMI
+# 🏁 ASOSIY ISHGA TUSHIRISH (CONFLICT-PROOF)
 def main():
     Thread(target=run_server).start()
     
-    # Eskidan qolib ketgan webhooklarni butkul tozalash va to'qnashuvni yo'qotish
     app = Application.builder().token(TOKEN).build()
     
     try:
@@ -220,16 +219,17 @@ def main():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
+    # ⚡️ ESKI WEBHOOK VA PARAZIT JARAYONLARNI BOT TOKENIDAN UZIB TASHLLASH
     loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
-    time.sleep(1)
+    time.sleep(1.5)
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot muvaffaqiyatli ishga tushdi...")
+    print("Bot 100% muvaffaqiyatli ishga tushdi...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-        
+    
