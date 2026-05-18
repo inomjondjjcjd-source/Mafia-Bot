@@ -6,7 +6,6 @@ import random
 from flask import Flask
 from threading import Thread
 
-# Kerakli kutubxonalarni avtomatik tekshirish va o'rnatish
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -23,9 +22,10 @@ DB = {
     "users": {}, 
     "promocodes": {}, 
     "settings": {"ticket_price": 4000, "min_withdraw": 15000}, 
-    "stats": {"total_games": 0, "total_prizes_given": 0, "mines_profit": 0, "apple_profit": 0, "aviator_profit": 0}
+    "stats": {"total_games": 0, "total_prizes_given": 0, "mines_profit": 0, "apple_profit": 0, "aviator_profit": 0, "slot_profit": 0}
 }
 APPLE_COEFFS = [1.23, 1.54, 1.93, 2.41, 3.02, 4.02, 5.70, 8.55, 13.43, 69.48]
+SLOT_EMOJIS = ["🍒", "🍋", "🍇", "🔔", "💎", "7️⃣"]
 
 def load_db():
     global DB
@@ -56,11 +56,11 @@ def check_user(uid, name="Foydalanuvchi"):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     ud = check_user(uid, update.effective_user.first_name)
-    txt = f"👑 *SHOX SUPREME CASINO v4.0*\n\n💵 *Balans:* {ud['balance']} so'm\n🎫 *Chiptalar:* {ud['tickets']} ta\n\n🔥 *O'yinlar:* 1. Mines, 2. Apple of Fortune, 3. Aviator"
+    txt = f"👑 *SHOX SUPREME PLATFORMA*\n\n💵 *Balans:* {ud['balance']} so'm\n🎫 *Chiptalar:* {ud['tickets']} ta\n\nFaqat eng daxshatli va mukammal bo'limlar 👇"
     kb = [
-        [InlineKeyboardButton("💣 Mines", callback_data="g_mines"), InlineKeyboardButton("🍏 Apple of Fortune", callback_data="g_apple")],
-        [InlineKeyboardButton("✈️ Aviator (Samolyot)", callback_data="g_aviator")],
-        [InlineKeyboardButton("🎫 Chipta (4k)", callback_data="b_ticket"), InlineKeyboardButton("📦 Keyslar", callback_data="g_cases")],
+        [InlineKeyboardButton("💣 Mines (Mina)", callback_data="g_mines"), InlineKeyboardButton("🎰 Slot (777)", callback_data="g_slot")],
+        [InlineKeyboardButton("🍏 Apple of Fortune", callback_data="g_apple"), InlineKeyboardButton("✈️ Aviator", callback_data="g_aviator")],
+        [InlineKeyboardButton("🎫 Chipta Xarid Qilish (4k)", callback_data="b_ticket"), InlineKeyboardButton("📦 Maxfiy Keyslar", callback_data="g_cases")],
         [InlineKeyboardButton("📊 Profil", callback_data="u_profile"), InlineKeyboardButton("💳 Pul Yechish", callback_data="u_withdraw")]
     ]
     if uid == ADMIN_ID: 
@@ -92,6 +92,40 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif q.data == "u_withdraw":
         await q.edit_message_text(f"💳 *PUL YECHISH*\n\nMinimal: {DB['settings']['min_withdraw']} so'm\nID: `{uid}`\nYechish uchun admin lichkasiga yozing uka!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("👑 Admin Lichka", url="https://t.me/shox_admin")], [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
     
+    # 🎰 SLOT (777) O'YINI (YANGI QO'SHILDI 🔥)
+    elif q.data == "g_slot":
+        if ud["balance"] < 3000:
+            await q.edit_message_text("❌ Slot o'ynash uchun kamida 3000 so'm kerak!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
+            return
+        ud["balance"] -= 3000
+        res = [random.choice(SLOT_EMOJIS) for _ in range(3)]
+        line = " | ".join(res)
+        
+        if res[0] == res[1] == res[2]:
+            if res[0] == "7️⃣":
+                win = 50000
+                txt = f"🎰 *SLOT 777* 🎰\n\n▶️ [ {line} ]\n\n👑 *DAXSHATLI JACKPOT!!!* X777! +50,000 so'm yutdingiz!"
+            else:
+                win = 15000
+                txt = f"🎰 *SLOT 777* 🎰\n\n▶️ [ {line} ]\n\n🎉 *G'ALABA!* 3 ta bir xil! +15,000 so'm!"
+            ud["balance"] += win
+            ud["total_won"] += win
+            DB["stats"]["total_prizes_given"] += win
+        elif res[0] == res[1] or res[1] == res[2] or res[0] == res[2]:
+            win = 5000
+            ud["balance"] += win
+            ud["total_won"] += win
+            DB["stats"]["total_prizes_given"] += win
+            txt = f"🎰 *SLOT 777* 🎰\n\n▶️ [ {line} ]\n\n💵 *Kichik Yutuq!* 2 ta bir xil! +5,000 so'm!"
+        else:
+            DB["stats"]["slot_profit"] += 3000
+            txt = f"🎰 *SLOT 777* 🎰\n\n▶️ [ {line} ]\n\n💀 *Omad kelmadi!* Qayta urunib ko'ring uka!"
+            
+        ud["games_played"] += 1
+        DB["stats"]["total_games"] += 1
+        save_db()
+        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 Qayta aylantirish (3k)", callback_data="g_slot")], [InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]]))
+
     # 💣 MINES
     elif q.data == "g_mines":
         if not ud["mines_game"]:
@@ -208,7 +242,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["aviator_game"] = {"bet": 2000, "current_mult": 1.0, "crash": cp}
         save_db()
         
-        # Silliq va tezkor render simulyatsiyasi
         cm = 1.0
         while cm < cp:
             await q.edit_message_text(f"✈️ *AVIATOR* \n\n🚀 Koeffitsiyent: *x{cm}*\n💰 Yutuq: {int(2000*cm)} so'm", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"🛑 CASHOUT (x{cm})", callback_data="av_cashout")]]))
@@ -256,7 +289,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 👑 ADMIN PANEL
     elif q.data == "admin_dashboard" and uid == ADMIN_ID:
-        await q.edit_message_text(f"👑 *BOSS PANEL v4.0*\n👤 A'zolar: {len(DB['users'])}\n🕹 O'yinlar: {DB['stats']['total_games']}\n💰 Yutuqlar: {DB['stats']['total_prizes_given']} so'm\n\n💣 Mines: +{DB['stats'].get('mines_profit',0)}\n🍏 Apple: +{DB['stats'].get('apple_profit',0)}\n✈️ Aviator: +{DB['stats'].get('aviator_profit',0)}\n\n/plus ID PUL, /minus ID PUL", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
+        await q.edit_message_text(f"👑 *BOSS PANEL v4.0*\n👤 A'zolar: {len(DB['users'])}\n🕹 O'yinlar: {DB['stats']['total_games']}\n💰 Yutuqlar: {DB['stats']['total_prizes_given']} so'm\n\n💣 Mines: +{DB['stats'].get('mines_profit',0)}\n🍏 Apple: +{DB['stats'].get('apple_profit',0)}\n✈️ Aviator: +{DB['stats'].get('aviator_profit',0)}\n🎰 Slot: +{DB['stats'].get('slot_profit',0)}\n\n/plus ID PUL, /minus ID PUL", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
 
 async def show_mines(q, ud):
     mg = ud["mines_game"]
@@ -293,7 +326,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_db()
         await update.message.reply_text(f"🎁 Promokod! +{v} so'm qo'shildi!")
         return
-    await update.message.reply_text("🤖 O'ynash uchun /start bosing!")
+    await update.message.reply_text("🤖 O'nsh uchun /start bosing!")
 
 async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -325,10 +358,8 @@ def run_flask():
 
 if __name__ == '__main__':
     load_db()
-    # Flask alohida oqimda ishlaydi
     Thread(target=run_flask, daemon=True).start()
     
-    # Telegram bot asosiy oqimda ishga tushadi (Render xato bermasligi uchun)
     bot_app = Application.builder().token(TOKEN).build()
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("plus", admin_plus))
@@ -336,5 +367,6 @@ if __name__ == '__main__':
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     
-    print("Bot daxshatli rejimda, xatolarsiz muvaffaqiyatli boshlandi...")
+    print("Bot daxshatli va to'liq rejimda muvaffaqiyatli boshlandi...")
     bot_app.run_polling(drop_pending_updates=True)
+                                                                 
