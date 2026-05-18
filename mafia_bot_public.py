@@ -3,174 +3,224 @@ import sys
 import subprocess
 import time
 
-# RENDER KESHINI CHETLAB O'TISH UCHUN AVTOMATIK KUTUBXONA O'RNATUVCHI
+# Loyihang uchun kerakli kutubxonalarni tekshirish
 try:
-    import telebot
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 except ImportError:
-    print("Telebot topilmadi. Majburiy o'rnatilmoqda...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyTelegramBotAPI", "Flask"])
-    import telebot
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "Flask"])
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+    from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-import random
-import re
 from threading import Thread
 from flask import Flask
-from telebot import types
 
-# SERVERNI SOZLASH
+# SERVER PORTINI SOZLASH
 server = Flask('')
 @server.route('/')
-def home(): return "Bot 100% Aktiv va Tezkor!"
+def home(): return "Bot To'liq Rejimda Aktiv!"
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ASOSIY PARAMETRLAR (SIZ AYTGANDEK HECH NIMA O'ZGARMADI)
+# ENGINA ASOSIY PARAMETRLARING
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
-MAIN_ADMIN = 7920504062  
+MAIN_ADMIN = 7920504062
 
-bot = telebot.TeleBot(TOKEN)
+# Foydalanuvchilar ma'lumotlar bazasi xotirasi
 USER_DATA = {}
 
-def get_user(user_id):
+def get_user_data(user_id):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "money": 999999999 if user_id == MAIN_ADMIN else 6000,
-            "last_bonus": 0,
-            "state": "none"
+            "questions_left": 0,
+            "last_bonus_time": 0,
+            "state": None,
+            "card_number": None,
+            "full_name": None
         }
     if user_id == MAIN_ADMIN:
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# ASOSIY KLAVIATURA
-def main_markup(user_id):
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton("🎮 Don-Don-Ziki", callback_data="game_ddz")
-    btn2 = types.InlineKeyboardButton("🎯 Dart O'yin", callback_data="game_dart")
-    btn3 = types.InlineKeyboardButton("🎁 Bonus", callback_data="game_bonus")
-    markup.add(btn1, btn2, btn3)
+# BARCHA TUGMALARINGNI QAYTARISH (MUKAMMAL MENYU)
+def get_main_menu_keyboard(user_id):
+    keyboard = [
+        [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz"),
+         InlineKeyboardButton("🎯 Dart O'ynash", callback_data="play_dart")],
+        [InlineKeyboardButton("🔍 Pul Qidirmoq (Savol)", callback_data="earn_money"),
+         InlineKeyboardButton("🗄 Shaxsiy Kabinet", callback_data="personal_cabinet")],
+        [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit_money"),
+         InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw_money")],
+        [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="get_bonus"),
+         InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn_fast")]
+    ]
     if user_id == MAIN_ADMIN:
-        markup.add(types.InlineKeyboardButton("👑 Admin Panel", callback_data="game_admin"))
-    return markup
+        keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
+    return InlineKeyboardMarkup(keyboard)
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    u_id = message.from_user.id
-    db = get_user(u_id)
-    db["state"] = "none"
-    text = f"🎰 *Martin Kazino*\n\n💰 Balans: *{db['money']:,} so'm*\n\nO'yinni tanlang:"
-    bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=main_markup(u_id))
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    ud = get_user_data(user_id)
+    ud["state"] = None
+    text = (
+        "🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
+        f"💰 Sening hisobing: *{ud['money']:,} so'm*\n\n"
+        "O'yin o'ynash va pul ishlash uchun tugmalarni bosing:"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("game_"))
-def callback_inline(call):
-    u_id = call.from_user.id
-    db = get_user(u_id)
-    back_markup = types.InlineKeyboardMarkup()
-    back_markup.add(types.InlineKeyboardButton("⬅️ Menyu", callback_data="game_home"))
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    ud = get_user_data(user_id)
+    
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
-    if call.data == "game_home":
-        db["state"] = "none"
-        text = f"🎰 *Martin Kazino*\n\n💰 Balans: *{db['money']:,} so'm*"
-        bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=main_markup(u_id))
+    if query.data == "back_home":
+        ud["state"] = None
+        text = f"🎰 *Martin Kazino*\n\n💰 Sening hisobing: *{ud['money']:,} so'm*"
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-    elif call.data == "game_bonus":
-        now = int(time.time())
-        if now - db["last_bonus"] < 3600:
-            rem = int((3600 - (now - db["last_bonus"])) // 60)
-            bot.edit_message_text(f"⏱ Bonus olingan! Yana *{rem} daqiqa* kuting.", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
+    elif query.data == "personal_cabinet":
+        card = ud["card_number"] if ud["card_number"] else "Kiritilmagan"
+        name = ud["full_name"] if ud["full_name"] else "Kiritilmagan"
+        text = (
+            "🗄 *Shaxsiy Kabinet*\n\n"
+            f"🆔 Sening ID raqaming: `{user_id}`\n"
+            f"💰 Balans: *{ud['money']:,} so'm*\n"
+            f"💳 Karta raqam: `{card}`\n"
+            f"👤 Ism-Familiya: *{name}*\n"
+            f"❓ Qolgan savollar: *{ud['questions_left']} ta*"
+        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard)
+
+    elif query.data == "get_bonus":
+        now = time.time()
+        if now - ud["last_bonus_time"] < 7200:
+            rem = int((7200 - (now - ud["last_bonus_time"])) // 60)
+            await query.edit_message_text(f"⏱ *Bonus olingan!* Yana *{rem} daqiqa* kuting.", parse_mode="Markdown", reply_markup=back_keyboard)
         else:
-            gift = random.randint(1000, 4000)
-            db["money"] += gift
-            db["last_bonus"] = now
-            bot.edit_message_text(f"🎁 Bonus qo'shildi: *+{gift:,} so'm*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
+            gift = random.randint(1000, 3000)
+            ud["money"] += gift
+            ud["last_bonus_time"] = now
+            await query.edit_message_text(f"🎁 Senga *+{gift:,} so'm* bonus berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif call.data in ["game_ddz", "game_dart"]:
-        g_type = "ddz" if call.data == "game_ddz" else "dart"
-        db["state"] = f"wait_bet_{g_type}"
-        bot.edit_message_text("✍️ *Tikadigan pulingizni yozing:*\n_(Masalan: 2000 yoki 5000)_", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
+    elif query.data == "withdraw_money":
+        if ud["money"] < 5000:
+            await query.edit_message_text("❌ Pul yechish uchun hisobingizda kamida *5,000 so'm* bo'lishi kerak!", parse_mode="Markdown", reply_markup=back_keyboard)
+        else:
+            ud["state"] = "wait_card_info"
+            await query.edit_message_text("💳 *Hisobingizda pul yetarli!*\n\nIltimos, pul o'tkaziladigan *Karta raqamingizni* va *Ism-familiyangizni* yozib yuboring:", parse_mode="Markdown")
 
-    elif call.data == "game_admin" and u_id == MAIN_ADMIN:
-        db["state"] = "wait_admin"
-        bot.edit_message_text("👑 *Admin Panel*\n\n📌 *Pul berish:* ID Miqdori (Masalan: `7920504062 5000`)", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=back_markup)
+    elif query.data in ["play_ddz", "play_dart"]:
+        gtype = "ddz" if query.data == "play_ddz" else "dart"
+        ud["state"] = f"wait_bet_{gtype}"
+        await query.edit_message_text("✊ *Qancha pul tikmoqchisiz?*\n_(Miqdorni yozing, Maks 5,000 so'm):_", parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: True)
-def handle_text(message):
-    u_id = message.from_user.id
-    text = message.text.strip()
-    db = get_user(u_id)
-    back_markup = types.InlineKeyboardMarkup()
-    back_markup.add(types.InlineKeyboardButton("⬅️ Menyu", callback_data="game_home"))
+    elif query.data == "admin_panel" and user_id == MAIN_ADMIN:
+        ud["state"] = "wait_admin_cmd"
+        admin_text = (
+            "👑 *Admin Panel*\n\n"
+            "📌 *Pul berish:* `ID Miqdor` (Masalan: `7920504062 5000`)\n"
+            "📌 *Savol qo'shish:* `ID +10` (Masalan: `7920504062 +10`)"
+        )
+        await query.edit_message_text(admin_text, parse_mode="Markdown", reply_markup=back_keyboard)
 
-    # ADMIN PANEL INTEGRATSIYASI (FORMAT SAQLANDI)
-    if u_id == MAIN_ADMIN and db["state"] == "wait_admin":
-        try:
-            t_id, amt = map(int, text.split())
-            t_db = get_user(t_id)
-            t_db["money"] += amt
-            db["state"] = "none"
-            bot.send_message(message.chat.id, f"✅ `ID: {t_id}`ga *+{amt:,} so'm* berildi!", parse_mode="Markdown", reply_markup=back_markup)
-        except:
-            bot.send_message(message.chat.id, "❌ Xato! Namuna: `7920504062 10000`", reply_markup=back_markup)
+    else:
+        # Boshqa tugmalar uchun standart javob
+        await query.edit_message_text("⏳ Bu bo'lim hozircha ishlab chiqilmoqda...", reply_markup=back_keyboard)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    ud = get_user_data(user_id)
+    
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
+
+    if ud["state"] == "wait_card_info":
+        ud["card_number"] = text
+        ud["state"] = None
+        await update.message.reply_text("✅ *Arizangiz qabul qilindi!* Tez orada adminlar hisobingizga pulni o'tkazib berishadi.", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # O'YIN TIKISH TIZIMI (NUQTA VA VERGULLAR TOZALANADI, XATO BERMAYDI)
-    if db["state"].startswith("wait_bet_"):
-        g_mode = db["state"].split("_")[2]
-        clean_text = re.sub(r'[.,\s]', '', text)
-        
-        if not clean_text.isdigit():
-            bot.send_message(message.chat.id, "❌ Faqat toza raqam kiriting! (Masalan: 2000)")
-            return
-            
-        bet = int(clean_text)
-        if bet < 500 or bet > 50000:
-            bot.send_message(message.chat.id, "❌ Tikish miqdori 500 - 50,000 so'm oralig'ida bo'lishi kerak!")
-            return
-            
-        if db["money"] < bet and u_id != MAIN_ADMIN:
-            bot.send_message(message.chat.id, f"❌ Mablag' yetarli emas! Sizda: {db['money']:,} so'm bor.")
-            return
-
-        if u_id != MAIN_ADMIN:
-            db["money"] -= bet
-        db["state"] = "none"
-
-        # DON-DON-ZIKI MANTIQI
-        if g_mode == "ddz":
-            win = random.random() < 0.30 if bet > 4000 else random.random() < 0.45
-            if win:
-                db["money"] += (bet * 2)
-                bot.send_message(message.chat.id, f"🎮 *Don-Don-Ziki*\n\n✊ Siz: Tosh\n✌️ Bot: Qaychi\n\n🏆 *Yutdingiz!* +{bet*2:,} so'm", parse_mode="Markdown", reply_markup=back_markup)
+    if user_id == MAIN_ADMIN and ud["state"] == "wait_admin_cmd":
+        try:
+            if "+" in text:
+                t_id, q_cnt = text.split()
+                t_id = int(t_id)
+                q_cnt = int(q_cnt.replace("+", ""))
+                td = get_user_data(t_id)
+                td["questions_left"] += q_cnt
+                await update.message.reply_text(f"✅ `ID: {t_id}`ga *+{q_cnt} ta savol* berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
             else:
-                bot.send_message(message.chat.id, f"🎮 *Don-Don-Ziki*\n\n✌️ Siz: Qaychi\n✊ Bot: Tosh\n\n📉 *Yutqazdingiz!* -{bet:,} so'm", parse_mode="Markdown", reply_markup=back_markup)
+                t_id, amt = map(int, text.split())
+                td = get_user_data(t_id)
+                td["money"] += amt
+                await update.message.reply_text(f"✅ `ID: {t_id}`ga *+{amt:,} so'm* berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
+            ud["state"] = None
+        except:
+            await update.message.reply_text("❌ Xato! Namuna: `7920504062 +10` yoki `7920504062 5000`", reply_markup=back_keyboard)
+        return
 
-        # DART MANTIQI
-        elif g_mode == "dart":
-            u_score = random.randint(1, 6)
-            b_score = random.randint(u_score + 1, 6) if (bet > 4000 or random.random() < 0.6) and u_score < 6 else random.randint(1, 6)
-            
-            res = f"🎯 *Dart*\n\n👤 Siz: *{u_score}* | 🤖 Bot: *{b_score}*\n\n"
-            if u_score > b_score:
-                db["money"] += (bet * 2)
+    if ud["state"] and ud["state"].startswith("wait_bet_"):
+        gmode = ud["state"].split("_")[2]
+        clean_text = re.sub(r'[.,\s]', '', text)
+        if not clean_text.isdigit():
+            await update.message.reply_text("❌ Xato! Faqat raqam kiriting.")
+            return
+        
+        bet = int(clean_text)
+        if bet < 100 or bet > 5000:
+            await update.message.reply_text("❌ Tikish miqdori 100 - 5,000 so'm oralig'ida bo'lishi kerak!")
+            return
+        if ud["money"] < bet and user_id != MAIN_ADMIN:
+            await update.message.reply_text("❌ Hisobingizda pul yetarli emas!")
+            return
+
+        if user_id != MAIN_ADMIN:
+            ud["money"] -= bet
+        ud["state"] = None
+
+        if gmode == "ddz":
+            if random.random() < 0.4:
+                ud["money"] += (bet * 2)
+                await update.message.reply_text(f"🎮 *Don-Don-Ziki*\n\n🏆 Yutdingiz! Hisobingizga *+{bet*2:,} so'm* qo'shildi.", parse_mode="Markdown", reply_markup=back_keyboard)
+            else:
+                await update.message.reply_text(f"🎮 *Don-Don-Ziki*\n\n📉 Afsuski yutqazdingiz! Hisobingizdan *-{bet:,} so'm* ketdi.", parse_mode="Markdown", reply_markup=back_keyboard)
+        else:
+            u_s = random.randint(1, 6)
+            b_s = random.randint(1, 6)
+            res = f"🎯 *Dart O'yini*\n\n👤 Siz: *{u_s}* | 🤖 Bot: *{b_s}*\n\n"
+            if u_s > b_s:
+                ud["money"] += (bet * 2)
                 res += f"🏆 *Siz yutdingiz!* +{bet*2:,} so'm"
-            elif u_score < b_score:
+            elif u_s < b_s:
                 res += f"📉 *Bot yutdi!* -{bet:,} so'm"
             else:
-                db["money"] += bet
+                ud["money"] += bet
                 res += "🤝 *Durang!* Pul qaytarildi."
-            bot.send_message(message.chat.id, res, parse_mode="Markdown", reply_markup=back_markup)
+            await update.message.reply_text(res, parse_mode="Markdown", reply_markup=back_keyboard)
 
-if __name__ == '__main__':
-    # SERVERNI ALOHIDA POTOKDA ISHGA TUSHIRISH
+def main():
     Thread(target=run_server).start()
     
-    # ⚠️ CRITICAL FIXED: TIQILIB QOLGAN WEBHOOK PARZITINI O'CHIRISH
-    print("Eski tiqilib qolgan webhook majburlab o'chirilmoqda...")
-    bot.remove_webhook()
-    time.sleep(1) # Telegram serverlari yangilanishi uchun kichik kutish
+    # TELEGRAMDAGI TIQILIB QOLGAN WEBHOOKNI TOZALASH (ENG ASOSIY JADU)
+    app = Application.builder().token(TOKEN).build()
     
-    print("Bot 100% toza va mukammal holatda ishga tushdi!")
-    bot.infinity_polling()
+    # Polling boshlashdan oldin eski ulanishlarni o'chirish
+    app.bot.delete_webhook(drop_pending_updates=True)
+    time.sleep(1)
     
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    print("Bot eski rejimi tiklandi va ishga tushirildi...")
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
