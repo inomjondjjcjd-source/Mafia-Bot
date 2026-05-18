@@ -1,4 +1,4 @@
-import os, random, asyncio, urllib.request, json
+import os, random, asyncio, urllib.request, json, time
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -21,6 +21,7 @@ TARGET_GROUP = "@yzbedkslls"
 USER_DATA = {}
 ADMIN_STATE = {} 
 GAME_BET_STATE = {} 
+USER_STATE = {} # Foydalanuvchilar karta yozayotganini aniqlash uchun
 
 def get_user(user_id, name):
     if user_id not in USER_DATA:
@@ -28,13 +29,13 @@ def get_user(user_id, name):
             "name": name,
             "money": 6000,         
             "games_played": 0,      
-            "group_bonus_received": False 
+            "group_bonus_received": False,
+            "last_bonus_time": 0  # Oxirgi marta bonus olgan vaqti (sekundda)
         }
     if user_id == MAIN_ADMIN:
         USER_DATA[user_id]["money"] = 999999999 
     return USER_DATA[user_id]
 
-# requests o'rniga Python'ni o'zidagi urllib bilan guruhni tekshirish (100% xatosiz)
 def check_group_member(user_id):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/getChatMember?chat_id={TARGET_GROUP}&user_id={user_id}"
@@ -54,6 +55,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = get_user(user.id, user.first_name)
     ADMIN_STATE.pop(user.id, None)
     GAME_BET_STATE.pop(user.id, None)
+    USER_STATE.pop(user.id, None)
 
     text = (
         f"🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
@@ -64,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz")],
         [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit"), InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw")],
-        [InlineKeyboardButton("🎁 Kunlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
+        [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
     ]
     if user.id == MAIN_ADMIN:
         kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
@@ -81,25 +83,47 @@ async def buttons_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "home":
         ADMIN_STATE.pop(u_id, None)
         GAME_BET_STATE.pop(u_id, None)
+        USER_STATE.pop(u_id, None)
         kb = [
             [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz")],
             [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit"), InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw")],
-            [InlineKeyboardButton("🎁 Kunlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
+            [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="bonus"), InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn")]
         ]
         if u_id == MAIN_ADMIN:
             kb.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
         await query.edit_message_text(f"🎰 Joriy balansingiz: *{db['money']:,} so'm*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
+    # 💳 PUL KIRITISH (Sening lichkang tugma bo'lib chiqadi)
     elif query.data == "deposit":
-        await query.edit_message_text("💳 *Pul kiritish bo'limi*\n\nHisobni to'ldirish uchun adminga murojaat qiling!", parse_mode="Markdown", reply_markup=back_kb)
+        text = "💳 *PUL KIRITISH BO'LIMI*\n\nBot hisobingizni to'ldirish uchun pastdagi tugma orqali adminga murojaat qiling va chekni yuboring:"
+        kb = [
+            [InlineKeyboardButton("👨‍💻 Admin Shaxsiy Chati", url="tg://user?id=7920504062")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="home")]
+        ]
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
+    # 💸 PUL YECHISH (Karta kiritish mantiqi)
     elif query.data == "withdraw":
-        await query.edit_message_text("⚠️ *Pul yechish rad etildi!*\n\n❌ Botdan eng kam pul yechish miqdori: *24,000 UZS*!", parse_mode="Markdown", reply_markup=back_kb)
+        if db["money"] < 24000:
+            await query.edit_message_text("⚠️ *Pul yechish rad etildi!*\n\n❌ Botdan eng kam pul yechish miqdori: *24,000 UZS* qilib belgilangan!", parse_mode="Markdown", reply_markup=back_kb)
+        else:
+            USER_STATE[u_id] = "waiting_card"
+            await query.edit_message_text("💳 *Hisobingizda pul yetarli!*\n\nIltimos, pul o'tkaziladigan *Karta raqamingizni* va *Ism-familiyangizni* yozib yuboring:\n\n📌 *Namuna:* `8600123456789012 Inomjon`", parse_mode="Markdown")
 
+    # ⏱ HAR 2 SOATDA BONUS
     elif query.data == "bonus":
-        rand_bonus = random.randint(200, 1000)
-        db["money"] += rand_bonus
-        await query.edit_message_text(f"🎁 *Tabriklaymiz!*\n\nSizga *+{rand_bonus} so'm* bonus berildi!\nHozirgi balans: *{db['money']:,} so'm*", parse_mode="Markdown", reply_markup=back_kb)
+        current_time = time.time()
+        time_passed = current_time - db["last_bonus_time"]
+        
+        if time_passed < 7200: # 2 soat = 7200 sekund
+            remaining_seconds = 7200 - time_passed
+            remaining_minutes = int(remaining_seconds // 60)
+            await query.edit_message_text(f"⏱ *Bonus hali tayyor emas!*\n\nSiz bonusni olgansiz. Keyingi bonusni olish uchun yana *{remaining_minutes} daqiqa* kutishingiz kerak!", parse_mode="Markdown", reply_markup=back_kb)
+        else:
+            rand_bonus = random.randint(200, 1000)
+            db["money"] += rand_bonus
+            db["last_bonus_time"] = current_time # Vaqtni yangilaymiz
+            await query.edit_message_text(f"🎁 *Tabriklaymiz!*\n\nSizga *+{rand_bonus} so'm* bonus berildi!\nHozirgi balans: *{db['money']:,} so'm*", parse_mode="Markdown", reply_markup=back_kb)
 
     elif query.data == "earn":
         if db["group_bonus_received"]:
@@ -178,7 +202,21 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     db = get_user(u_id, update.effective_user.first_name)
 
-    if GAME_BET_STATE.get(u_id) == "waiting_bet":
+    # USER KARTA MA'LUMOTLARINI YUBORGANDA
+    if USER_STATE.get(u_id) == "waiting_card":
+        USER_STATE.pop(u_id, None)
+        # Sening lichkangizga xabar boradi
+        admin_alert = (
+            f"💰 *PUL YECHISH SO'ROVI!*\n\n"
+            f"👤 Foydalanuvchi: {update.effective_user.first_name}\n"
+            f"🆔 ID raqami: `{u_id}`\n"
+            f"💳 Karta va Ism: `{text}`\n"
+            f"💸 Balansi: {db['money']:,} so'm"
+        )
+        await context.bot.send_message(chat_id=MAIN_ADMIN, text=admin_alert, parse_mode="Markdown")
+        await update.message.reply_text("✅ *Arizangiz qabul qilindi!*\n\nKarta ma'lumotlaringiz adminga yuborildi. Tez orada pulingiz tashlab beriladi!", parse_mode="Markdown")
+
+    elif GAME_BET_STATE.get(u_id) == "waiting_bet":
         try:
             bet = int(text)
             if bet < 600 or db["money"] < bet:
@@ -213,4 +251,4 @@ def main():
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__': main()
-    
+                                          
