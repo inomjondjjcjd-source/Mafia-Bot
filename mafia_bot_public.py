@@ -28,14 +28,14 @@ def run_server():
 # 🔑 ASOSIY PARAMETRLAR
 TOKEN = "8844314869:AAEDBVoZKGVS6-5oOOV9_jXXmNY3znLbhH8"
 MAIN_ADMIN = 7920504062
-MY_LICHKA = "https://t.me/inomjondjjcjd"  # 4 va 5-shartlar uchun lichkangiz
-CHANNEL_URL = "https://t.me/yzbedkslls"     # 7-shart guruh/kanal havolasi
+MY_LICHKA = "https://t.me/inomjondjjcjd"  
+CHANNEL_URL = "https://t.me/yzbedkslls"     
 
-# 💾 MA'LUMOTLAR OMBORI (XOTIRADA SAQLANADI)
+# 💾 MA'LUMOTLAR OMBORI
 USER_DATA = {}
-PROMO_CODES = {}  # {'PROMO100': miqdor}
+PROMO_CODES = {}  
 
-# 📝 200 TA UNIKAL MATEMATIK SAVOLLAR BAZASI (2-shart uchun)
+# 📝 200 TA SAVOLLAR BAZASI
 SAVOLLAR_BAZASI = [
     {"s": f"{a} + {b} = ?", "j": str(a + b)} for a in range(10, 30) for b in range(5, 15)
 ][:200]
@@ -44,12 +44,12 @@ def get_user_data(user_id):
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
             "money": 999999999 if user_id == MAIN_ADMIN else 6000,
-            "games_played": 0,           # O'yinlar soni (birinchi 2 ta o'yinni aniqlash uchun)
-            "questions_left": 12,        # 12 ta savol beriladi
-            "last_quiz_time": 0,         # 5 soatlik bloklash uchun
+            "games_played": 0,           
+            "questions_left": 12,        
+            "last_quiz_time": 0,         
             "current_quiz_idx": None,
             "last_bonus_time": 0,
-            "earned_fast_done": False,   # Guruhga a'zo bo'lib pul ishlash statusi
+            "earned_fast_done": False,   
             "state": None,
             "card_number": None,
             "full_name": None,
@@ -112,7 +112,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-    elif query.data == "personal_cabinet": # 3-shart (Fantaziya Shaxsiy kabinet)
+    elif query.data == "personal_cabinet":
         status = "👑 VIP Admin" if user_id == MAIN_ADMIN else "🎲 Oddiy O'yinchi"
         win_rate = 0 if (ud["history_wins"]+ud["history_losses"]) == 0 else int((ud["history_wins"]/(ud["history_wins"]+ud["history_losses"]))*100)
         text = (
@@ -130,7 +130,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif query.data == "get_bonus": # 6-shart (2 soatda 100-1500 so'm)
+    elif query.data == "get_bonus":
         now = time.time()
         if now - ud["last_bonus_time"] < 7200:
             rem_min = int((7200 - (now - ud["last_bonus_time"])) // 60)
@@ -141,18 +141,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["last_bonus_time"] = now
             await query.edit_message_text(f"🎁 Omad kuldi! Sizga *+{gift} so'm* hadya qilindi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif query.data == "deposit_money": # 4-shart (Lichkani ko'rsatish)
+    elif query.data == "deposit_money":
         text = f"💳 *Hisobni to'ldirish tizimi*\n\nPul kiritish va balansingizni ko'paytirish uchun to'g'ridan-to'g'ri loyiha rahbariga yozing:\n👉 [Mening Lichkam]({MY_LICHKA})"
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif query.data == "withdraw_money": # 5-shart (Minimal 25k va lichka)
+    elif query.data == "withdraw_money":
         if ud["money"] < 25000:
             await query.edit_message_text(f"❌ *Mablag' yetarsiz!*\n\nMinimal yechish miqdori: *25,000 so'm*.\nSizda hozir: *{ud['money']:,} so'm* bor.", parse_mode="Markdown", reply_markup=back_keyboard)
         else:
             text = f"💰 Hisobingizda pul yetarli!\n\nIltimos, pul yechish uchun pastdagi havola orqali menga o'z kartangizni yuboring:\n👉 [Karta tashlash uchun bosing]({MY_LICHKA})"
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif query.data == "earn_fast": # 7-shart (Kanalga a'zolik uchun 2000 so'm)
+    elif query.data == "earn_fast":
         if ud["earned_fast_done"]:
             await query.edit_message_text("❌ Siz bu vazifani allaqachon bajarib 2,000 so'm olgansiz!", reply_markup=back_keyboard)
         else:
@@ -163,12 +163,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("🚀 *Tezkor Pul Ishlash*\n\nPastdagi guruhga a'zo bo'ling va srazu 2,000 so'm balansga ega bo'ling:", parse_mode="Markdown", reply_markup=kb)
 
     elif query.data == "check_sub":
-        # Renderda xatolik bermasligi uchun tekshiruv simulyatsiyalanadi va srazu pul beriladi
         ud["money"] += 2000
         ud["earned_fast_done"] = True
         await query.edit_message_text("✅ Tabriklaymiz! Guruh tekshirildi, hisobingizga *+2,000 so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
-    elif query.data == "earn_money": # 2-shart (Savollar bo'limi)
+    elif query.data == "earn_money":
         now = time.time()
         if ud["questions_left"] <= 0 and (now - ud["last_quiz_time"] < 18000):
             rem_hr = int((18000 - (now - ud["last_quiz_time"])) // 3600)
@@ -178,7 +177,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ud["questions_left"] <= 0 and (now - ud["last_quiz_time"] >= 18000):
             ud["questions_left"] = 12
 
-        # Savol berish
         q_idx = random.randint(0, len(SAVOLLAR_BAZASI)-1)
         ud["current_quiz_idx"] = q_idx
         ud["state"] = "wait_quiz_answer"
@@ -189,12 +187,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["state"] = f"wait_bet_{gtype}"
         await query.edit_message_text("💰 *Tikish miqdorini kiriting:*\n_(Minimal 600 so'm, Maksimal 5,000 so'm oralig'ida)_", parse_mode="Markdown")
 
-    elif query.data == "admin_panel" and user_id == MAIN_ADMIN: # 8-shart Admin panel
+    elif query.data == "admin_panel" and user_id == MAIN_ADMIN:
         akb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕/➖ Foydalanuvchi Balansi", callback_data="adm_change_balance")],
             [InlineKeyboardButton("➕ Promokod Yaratish", callback_data="adm_create_promo")],
             [InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]
         ])
-        await query.edit_message_text("👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\nTizim sozlamalari va yangi aksiyalar yaratish bo'limi:", reply_markup=akb)
+        await query.edit_message_text("👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\nBot imkoniyati 70% ga sozlandi! Kerakli amalni tanlang:", reply_markup=akb)
+
+    elif query.data == "adm_change_balance" and user_id == MAIN_ADMIN:
+        ud["state"] = "wait_balance_mod"
+        await query.edit_message_text("💰 *Foydalanuvchi balansini boshqarish*\n\nPul qo'shish uchun: `ID +miqdor`\nPul ayirish uchun: `ID -miqdor` ko'rinishida yozing.\n\n*Masalan:* `7920504062 -15000` (Hisobidan 15,000 so'm ayiradi)", parse_mode="Markdown")
 
     elif query.data == "adm_create_promo" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_promo_creation"
@@ -207,6 +210,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ud = get_user_data(user_id)
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
+    # 🛑 ADMIN: BOSHQA ODAMLAR BALANSINI O'ZGARTIRISH (+ / -)
+    if user_id == MAIN_ADMIN and ud["state"] == "wait_balance_mod":
+        try:
+            target_id, operation = text.split()
+            target_id = int(target_id)
+            target_ud = get_user_data(target_id)
+            
+            if operation.startswith("+"):
+                amount = int(operation.replace("+", ""))
+                target_ud["money"] += amount
+                msg = f"✅ `ID: {target_id}` hisobiga *+{amount:,} so'm* muvaffaqiyatli qo'shildi!"
+            elif operation.startswith("-"):
+                amount = int(operation.replace("-", ""))
+                target_ud["money"] -= amount
+                if target_ud["money"] < 0: target_ud["money"] = 0  # Balans minusga tushib ketmasligi uchun
+                msg = f"🔥 `ID: {target_id}` hisobidan *-{amount:,} so'm* muvaffaqiyatli ayirib olindi!"
+            else:
+                raise ValueError
+                
+            ud["state"] = None
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=back_keyboard)
+        except:
+            await update.message.reply_text("❌ Xato kiritish! Namuna: `7920504062 -5000` yoki `7920504062 +10000`", reply_markup=back_keyboard)
+        return
+
     # Promokod yaratish (Admin)
     if user_id == MAIN_ADMIN and ud["state"] == "wait_promo_creation":
         try:
@@ -218,11 +246,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Xato format. Qayta urinib ko'ring.", reply_markup=back_keyboard)
         return
 
-    # Promokod kiritish (Oddiy foydalanuvchilar matn yuborganda tekshiriladi)
+    # Promokod kiritish
     if text.upper() in PROMO_CODES and ud["state"] is None:
         bonus_amt = PROMO_CODES[text.upper()]
         ud["money"] += bonus_amt
-        del PROMO_CODES[text.upper()] # Bir marta ishlatib o'chiriladi
+        del PROMO_CODES[text.upper()] 
         await update.message.reply_text(f"🎉 Aktivlashdi! Promokod sizga *+{bonus_amt:,} so'm* taqdim etdi!", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
@@ -243,7 +271,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Noto'g'ri! To'g'ri javob `{correct_ans}` edi. Qolgan savollar: {ud['questions_left']} ta", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # O'yin tikish mantiqi (1-shart algoritmi)
+    # O'yin tikish mantiqi (70% BOT YUTISH ALGORITMI)
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
         if not text.isdigit():
@@ -251,7 +279,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         bet = int(text)
-        if bet < 600 or bet > 5000: # 1-shart (600 - 5000 limit)
+        if bet < 600 or bet > 5000: 
             await update.message.reply_text("❌ Tikish taqiqlanadi! Minimal 600 so'm, maksimal 5,000 so'm tikish mumkin uka.")
             return
         if ud["money"] < bet and user_id != MAIN_ADMIN:
@@ -263,15 +291,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["state"] = None
         ud["games_played"] += 1
 
-        # 🎰 YUTIQ/YUTQAZISH ALGORITMI (1-shart talablari bo'yicha)
+        # 🎰 ASOSIY 70% REJALASHGAN MATEMATIK ALGORITM
         is_win = False
         
         if bet > 3000:
-            is_win = False # 3000 so'mdan yuqorida bot har doim yutib oladi (foydalanuvchi yutqazadi)
+            is_win = False # 3000 so'mdan yuqori tikilsa bot srazu yutadi
         elif ud["games_played"] <= 2:
-            is_win = True  # Birinchi 2 ta o'yinda bot foydalanuvchiga qolib beradi (foydalanuvchi yutadi)
+            is_win = True  # Birinchi 2 ta o'yinda qasddan yutqazib beradi (tuzoq)
         else:
-            is_win = random.random() > 0.65 # Keyingi o'yinlarda 65% bot yutadi (35% foydalanuvchi yutadi)
+            # 🎯 70% BOT YUTADI, FOYDALANUVCHIGA FAQAT 30% CHANS QOLADI!
+            is_win = random.random() > 0.70 
 
         if is_win:
             ud["money"] += (bet * 2)
@@ -284,7 +313,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         title = "✊ Don-Don-Ziki" if gmode == "ddz" else "🎯 Dart O'yini"
         await update.message.reply_text(f"🎮 *{title}*\n\n{res_txt}", parse_mode="Markdown", reply_markup=back_keyboard)
 
-# 🏁 BOTNI PARAZIT JARAYONLARSIZ ISHGA TUSHIRISH
+# 🏁 BOTNI ISHGA TUSHIRISH
 def main():
     Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
