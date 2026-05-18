@@ -16,14 +16,17 @@ def load_db():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                DB = json.load(f); DB["users"] = {int(k): v for k, v in DB.get("users", {}).items()}
+                DB = json.load(f)
+                DB["users"] = {int(k): v for k, v in DB.get("users", {}).items()}
                 if "cheaters" not in DB["settings"]: DB["settings"]["cheaters"] = []
         except: pass
 
 def save_db():
     try:
-        to_save = DB.copy(); to_save["users"] = {str(k): v for k, v in DB["users"].items()}
-        with open(DATA_FILE, "w", encoding="utf-8") as f: json.dump(to_save, f, indent=4, ensure_ascii=False)
+        to_save = DB.copy()
+        to_save["users"] = {str(k): v for k, v in DB["users"].items()}
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(to_save, f, indent=4, ensure_ascii=False)
     except: pass
 
 def check_user(uid, name="Foydalanuvchi"):
@@ -34,8 +37,9 @@ def check_user(uid, name="Foydalanuvchi"):
     return DB["users"][uid]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id; ud = check_user(uid, update.effective_user.first_name)
-    txt = f"👑 *SHOX SUPREME PLATFORMA*\n\n💵 *Balans:* {ud['balance']} so'm\n🎫 *Chiptalar:* {ud['tickets']} ta"
+    uid = update.effective_user.id
+    ud = check_user(uid, update.effective_user.first_name)
+    txt = f"👑 SHOX SUPREME PLATFORMA\n\n💵 Balans: {ud['balance']} so'm\n🎫 Chiptalar: {ud['tickets']} ta"
     kb = [
         [InlineKeyboardButton("🍏 Apple of Fortune", callback_data="g_apple"), InlineKeyboardButton("💣 Mines (Mina)", callback_data="g_mines")],
         [InlineKeyboardButton("🐥 Chicken Road", callback_data="g_chicken"), InlineKeyboardButton("✈️ Aviator", callback_data="g_aviator")],
@@ -43,22 +47,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_dash")] if uid == ADMIN_ID else []
     ]
     kb = [x for x in kb if x]
-    if update.message: await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    else: await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    if update.message: await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb))
+    else: await update.callback_query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer(); uid = q.from_user.id; ud = check_user(uid)
     is_cheat = (uid == ADMIN_ID or uid in DB["settings"].get("cheaters", []))
 
-    if q.data == "to_main": await start(update, context)
-    elif q.data == "b_1" and ud["balance"] >= 4000: ud["balance"] -= 4000; ud["tickets"] += 1; save_db(); await start(update, context)
-    elif q.data == "b_10" and ud["balance"] >= 30000: ud["balance"] -= 30000; ud["tickets"] += 10; save_db(); await start(update, context)
+    if q.data == "to_main": 
+        await start(update, context)
+    
+    elif q.data == "b_1" and ud["balance"] >= 4000: 
+        ud["balance"] -= 4000; ud["tickets"] += 1; save_db(); await start(update, context)
+    elif q.data == "b_10" and ud["balance"] >= 30000: 
+        ud["balance"] -= 30000; ud["tickets"] += 10; save_db(); await start(update, context)
 
     # 🍏 APPLE OF FORTUNE
     elif q.data == "g_apple":
         if not ud["apple"]:
             if ud["balance"] < 3000: return
-            ud["balance"] -= 3000; grid = []
+            ud["balance"] -= 3000
+            grid = []
             for r in range(10):
                 row = ["good"] * 5; row[random.randint(0, 4)] = "bad"
                 grid.append(row)
@@ -70,7 +79,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["apple"] = None; save_db()
             await q.edit_message_text("💀 Chirigan olma! Yutqazdingiz.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🍏 Qayta", callback_data="g_apple")],[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
         ag["payout"] = int(3000 * COEFFS[ag["row"]]); ag["row"] += 1; save_db()
-        if ag["row"] == 10: ud["balance"] += ag["payout"]; ud["apple"] = None; save_db(); await start(update, context); return
+        if ag["row"] == 10: 
+            ud["balance"] += ag["payout"]; ud["apple"] = None; save_db(); await start(update, context); return
         await show_apple(q, ud, is_cheat)
     elif q.data == "ap_cash" and ud["apple"]:
         ud["balance"] += ud["apple"]["payout"]; ud["apple"] = None; save_db(); await start(update, context)
@@ -91,7 +101,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["mines"] = None; save_db()
             await q.edit_message_text("💥 BOMBA! Portladingiz.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💣 Qayta", callback_data="g_mines")],[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
         mg["step"] += 1; mg["pay"] = int(mg["pay"] * 1.5); save_db()
-        if mg["step"] == 7: ud["balance"] += mg["pay"]; ud["mines"] = None; save_db(); await q.edit_message_text(f"👑 G'ALABA! +{mg['pay']} so'm", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
+        if mg["step"] == 7: 
+            ud["balance"] += mg["pay"]; ud["mines"] = None; save_db(); await q.edit_message_text(f"👑 G'ALABA! +{mg['pay']} so'm", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
         await show_mines(q, ud, is_cheat)
     elif q.data == "m_cash" and ud["mines"]:
         ud["balance"] += ud["mines"]["pay"]; ud["mines"] = None; save_db(); await start(update, context)
@@ -112,31 +123,56 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["chicken"] = None; save_db()
             await q.edit_message_text("☠️ Suyakka duch keldingiz! Tovuq o'ldi.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🐥 Qayta", callback_data="g_chicken")],[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
         cg["pay"] = int(cg["pay"] * 1.8); cg["row"] += 1; save_db()
-        if cg["row"] == 5: ud["balance"] += cg["pay"]; ud["chicken"] = None; save_db(); await start(update, context); return
+        if cg["row"] == 5: 
+            ud["balance"] += cg["pay"]; ud["chicken"] = None; save_db(); await start(update, context); return
         await show_chicken(q, ud, is_cheat)
     elif q.data == "ch_cash" and ud["chicken"]:
         ud["balance"] += ud["chicken"]["pay"]; ud["chicken"] = None; save_db(); await start(update, context)
 
-    # ✈️ AVIATOR
+    # ✈️ AVIATOR (MUKAMMAL ISHLAYDIGAN KOEFFITSIYENT SIKLI 🚀)
     elif q.data == "g_aviator":
         if ud["balance"] < 2000: return
-        crash = DB["settings"].get("next_aviator") or round(random.uniform(1.3, 4.5), 2)
-        win_p = round(random.uniform(1.1, max(1.2, crash - 0.1)), 2)
-        ud["balance"] -= 2000; ud["aviator"] = {"win": win_p, "crash": crash, "bet": 2000}; save_db()
-        txt = f"✈️ *AVIATOR PLATFORMA*\n\n📈 Joriy Koeffitsiyent: *x{win_p}*\n(Portlash: x{crash})"
-        kb = [[InlineKeyboardButton(f"🛑 CASHOUT (x{win_p})", callback_data="av_cash")], [InlineKeyboardButton("🚀 Kutish", callback_data="av_risk")]]
-        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    elif q.data == "av_cash" and ud["aviator"]:
-        ud["balance"] += int(ud["aviator"]["bet"] * ud["aviator"]["win"]); ud["aviator"] = None; DB["settings"]["next_aviator"] = None; save_db(); await start(update, context)
-    elif q.data == "av_risk" and ud["aviator"]:
-        c = ud["aviator"]["crash"]; ud["aviator"] = None; DB["settings"]["next_aviator"] = None; save_db()
-        await q.edit_message_text(f"💥 Portladi! Nuqta: x{c}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta", callback_data="g_aviator")],[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+        ud["balance"] -= 2000
+        # Admin belgilagan maxfiy koeffitsiyent yoki tasodifiy nuqta
+        crash = DB["settings"].get("next_aviator") or round(random.uniform(1.5, 5.0), 2)
+        ud["aviator"] = {"current_win": 1.0, "crash": crash, "bet": 2000}
+        save_db()
+        await update_aviator_frame(q, ud)
+        
+    elif q.data == "av_risk_step":
+        ag = ud["aviator"]
+        if not ag: return
+        # Har bir bosganda samolyot barqaror yuqoriga ko'tariladi
+        ag["current_win"] = round(ag["current_win"] + random.uniform(0.2, 0.5), 2)
+        if ag["current_win"] >= ag["crash"]:
+            # Samolyot portladi nuqtasi
+            c_point = ag["crash"]
+            ud["aviator"] = None; DB["settings"]["next_aviator"] = None; save_db()
+            await q.edit_message_text(f"💥 BOOM! Samolyot x{c_point} nuqtada portlab ketdi!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta", callback_data="g_aviator")],[InlineKeyboardButton("⬅️", callback_data="to_main")]])); return
+        save_db()
+        await update_aviator_frame(q, ud)
+        
+    elif q.data == "av_cashout_now" and ud["aviator"]:
+        ag = ud["aviator"]
+        win_money = int(ag["bet"] * ag["current_win"])
+        ud["balance"] += win_money
+        ud["aviator"] = None; DB["settings"]["next_aviator"] = None; save_db()
+        await q.edit_message_text(f"💰 Muvaffaqiyatli CASHOUT!\nYutdingiz: +{win_money} so'm\nYakuniy koeffitsiyent: x{ag['current_win']}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta", callback_data="g_aviator")],[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
 
     # 👑 ADMIN PANEL
     elif q.data == "admin_dash" and uid == ADMIN_ID:
         ch_list = ", ".join(map(str, DB["settings"]["cheaters"])) or "Hech kim"
-        txt = f"👑 *MUKAMMAL ADMIN PANEL*\n\n🎯 *Cheat yoqilganlar:* `{ch_list}`\n✈️ *Keyingi Aviator:* x{DB['settings'].get('next_aviator') or 'Avto'}\n\n*Buyruqlar:*\n`/cheat ID` - O'yinchiga cheat yoqish/o'chirish\n`/setav KOEFF` - Aviatorni qotirish\n`/plus ID PUL` - Balans to'ldirish"
-        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+        txt = f"👑 MUKAMMAL ADMIN PANEL\n\n🎯 Cheat yoqilgan IDlar: {ch_list}\n✈️ Keyingi Aviator: x{DB['settings'].get('next_aviator') or 'Avto'}\n\n⚙️ Buyruqlar:\n/cheat ID - Cheat yoqish/o'chirish\n/setav KOEFF - Aviator qotirish\n/plus ID PUL - Balans qo'shish"
+        await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️", callback_data="to_main")]]))
+
+async def update_aviator_frame(q, ud):
+    ag = ud["aviator"]
+    txt = f"✈️ AVIATOR PLATFORMA\n\n🚀 Samolyot havoda parvoz qilmoqda...\n📈 Joriy Koeffitsiyent: x{ag['current_win']}\n\n💵 Tikilgan pul: {ag['bet']} so'm\n💰 Hozirgi yutuq: {int(ag['bet'] * ag['current_win'])} so'm"
+    kb = [
+        [InlineKeyboardButton(f"🛑 CASHOUT ({int(ag['bet'] * ag['current_win'])} so'm)", callback_data="av_cashout_now")],
+        [InlineKeyboardButton("🚀 Yanada balandroq kutish (Tavakkal)", callback_data="av_risk_step")]
+    ]
+    await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
 async def show_apple(q, ud, is_cheat):
     ag = ud["apple"]; kb = []
@@ -150,7 +186,7 @@ async def show_apple(q, ud, is_cheat):
         kb.append(row_b)
     if ag["row"] > 0: kb.append([InlineKeyboardButton(f"💰 Cashout ({ag['payout']})", callback_data="ap_cash")])
     kb.append([InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")])
-    await q.edit_message_text(f"🍏 Apple (Bosqich: {ag['row'] + 1}/10)", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(f"🍏 Apple of Fortune (Bosqich: {ag['row'] + 1}/10)", reply_markup=InlineKeyboardMarkup(kb))
 
 async def show_mines(q, ud, is_cheat):
     mg = ud["mines"]; kb = []
@@ -160,7 +196,7 @@ async def show_mines(q, ud, is_cheat):
         if len(kb) == 0 or len(kb[-1]) == 3: kb.append([])
         kb[-1].append(InlineKeyboardButton(lbl, callback_data=f"m_c_{i}"))
     kb.append([InlineKeyboardButton(f"💰 Cashout ({mg['pay']})", callback_data="m_cash")])
-    await q.edit_message_text(f"💣 Mines (Minalar: {mg['step']}/7)", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(f"💣 Mines (Yutuqli qadamlar: {mg['step']}/7)", reply_markup=InlineKeyboardMarkup(kb))
 
 async def show_chicken(q, ud, is_cheat):
     cg = ud["chicken"]; kb = []
@@ -182,7 +218,7 @@ async def admin_cheat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if tgt in DB["settings"]["cheaters"]:
             DB["settings"]["cheaters"].remove(tgt); txt = f"❌ {tgt} uchun cheat o'chirildi."
         else:
-            DB["settings"]["cheaters"].append(tgt); txt = f"✅ {tgt} uchun cheat YOQILDI! Endi u hamma narsani ko'radi."
+            DB["settings"]["cheaters"].append(tgt); txt = f"✅ {tgt} uchun cheat YOQILDI! U ssenariyni ko'ra oladi."
         save_db(); await update.message.reply_text(txt)
 
 async def admin_setav(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -196,7 +232,7 @@ async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Bot Online"
+def home(): return "Online"
 
 async def main():
     load_db()
