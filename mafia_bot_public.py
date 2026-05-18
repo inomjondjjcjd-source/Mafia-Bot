@@ -21,15 +21,15 @@ except ImportError:
 # 🔑 ASOSIY SOZLAMALAR
 TOKEN = "8303235336:AAEk3J42idbz1KcamIWPC2L3_IlROPeoadI"
 ADMIN_ID = 8086545587  # 👑 Shox Admin ID
-DATA_FILE = "omad_shou_bot_db.json"
+DATA_FILE = "omad_shou_premium_db.json"
 
-# 📊 BAZA TUZILMASI
+# 📊 PREMIUM BAZA TUZILMASI
 DB = {
     "users": {},
     "promocodes": {},
     "settings": {
         "vip_price": 40000,       # 💰 Kunlik VIP obuna narxi = 40,000 so'm
-        "ticket_price": 2000,     # 🎫 Oddiy 1 ta o'yin chiptasi narxi = 2,000 so'm
+        "ticket_price": 4000,     # 🎫 1 ta o'yin chiptasi narxi = 4,000 so'm (Pullik qilindi!)
         "min_withdraw": 15000     # 💳 Minimal pul yechish miqdori
     },
     "stats": {
@@ -38,15 +38,13 @@ DB = {
     }
 }
 
-# 🎁 OMAD SHOU SOVG'ALARI VA EHTIMOLLIKLARI
+# 🎁 YANGILANGAN MUKOFOTLAR TIZIMI (ENG KAMI 1,000 SO'M, FF YO'QOTILDI)
 PRIZES = [
-    {"name": "🎁 500 so'm bonus", "type": "balance", "value": 500, "weight": 40},
-    {"name": "🎁 1,500 so'm bonus", "type": "balance", "value": 1500, "weight": 25},
-    {"name": "🎁 5,000 so'm katta bonus!", "type": "balance", "value": 5000, "weight": 10},
-    {"name": "🎁 10,000 so'm JEKPOT!", "type": "balance", "value": 10000, "weight": 3},
-    {"name": "💎 Free Fire 110 Olmos Kuponi", "type": "code", "value": "FF-DIAMOND-772X", "weight": 5},
-    {"name": "💎 Free Fire 231 Olmos Kuponi", "type": "code", "value": "FF-VIP-OLMOS-991A", "weight": 2},
-    {"name": "🎫 Tekin O'yin Chiptasi", "type": "ticket", "value": 1, "weight": 10},
+    {"name": "💰 1,000 so'm naqd bonus", "type": "balance", "value": 1000, "weight": 45},
+    {"name": "💰 3,000 so'm o'rtacha bonus", "type": "balance", "value": 3000, "weight": 25},
+    {"name": "🔥 7,000 so'm daxshatli bonus!", "type": "balance", "value": 7000, "weight": 12},
+    {"name": "👑 15,000 so'm SUPREME JEKPOT!", "type": "balance", "value": 15000, "weight": 3},
+    {"name": "🎫 1 ta O'yin Chiptasi", "type": "ticket", "value": 1, "weight": 10},
     {"name": "❌ Afsuski bu safar omad kelmadi!", "type": "nothing", "value": 0, "weight": 5}
 ]
 
@@ -74,8 +72,8 @@ def check_user(user_id, name="Foydalanuvchi"):
     if user_id not in DB["users"]:
         DB["users"][user_id] = {
             "name": name,
-            "balance": 5000,         # 🎁 Yangi kirgan odamga 5,000 so'm start bonus!
-            "tickets": 2,            # 🎫 2 ta tekin o'yin chiptasi
+            "balance": 5000,         # 🎁 Yangi kirgan odamga 5,000 so'm start bonus! (Chipta sotib olishga yetadi)
+            "tickets": 0,            # ❌ Boshida tekin chipta berilmaydi!
             "vip_until": 0,          # 🕒 VIP obuna tugash vaqti
             "total_won": 0,          # 🏆 Jami yutgan pullari
             "games_played": 0
@@ -83,7 +81,7 @@ def check_user(user_id, name="Foydalanuvchi"):
         save_db()
     return DB["users"][user_id]
 
-# 🎰 TASODIFIY SOVG'A TANLASH
+# 🎰 OMAD G'ILDIRAGI TASODIFIY TANLOV
 def spin_wheel():
     prizes_list = []
     for p in PRIZES:
@@ -98,14 +96,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = time.time()
     
     is_vip = ud["vip_until"] > current_time
-    vip_status = "🔥 FAOL (Cheksiz kirish)" if is_vip else "❌ Faol emas"
+    vip_status = "🔥 FAOL (Cheksiz o'yin)" if is_vip else "❌ Faol emas"
     
     txt = (
-        f"🎰 *Xush kelibsiz daxshatli OMAD SHOU Botiga!* uka\n\n"
-        f"Bu yerda siz virtual g'ildirakni aylantirib, balansga haqiqiy pul, omadli chiptalar va Free Fire olmoslarini yutib olishingiz mumkin! 🎉\n\n"
-        f"💳 *Sizning balansingiz:* {ud['balance']} so'm\n"
+        f"🎰 *MUKAMMAL OMAD SHOU PREMIUM BOTI* uka\n\n"
+        f"G'ildirakni daxshatli aylantiring va balansga real pullar yutib oling! 🎉\n\n"
+        f"💵 *Sizning balansingiz:* {ud['balance']} so'm\n"
         f"🎫 *O'yin chiptalaringiz:* {ud['tickets']} ta\n"
-        f"👑 *VIP status:* {vip_status}\n"
+        f"👑 *VIP Status (24 soat):* {vip_status}\n"
     )
     
     if is_vip:
@@ -114,15 +112,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     buttons = [
         [InlineKeyboardButton("🎰 G'ildirakni Aylantirish", callback_data="play_game")],
-        [InlineKeyboardButton("👑 24 soatlik VIP sotib olish (40k)", callback_data="buy_vip"), 
-         InlineKeyboardButton("🎫 Chipta olish (2k)", callback_data="buy_ticket")],
+        [InlineKeyboardButton("👑 VIP rejimni yoqish (40k)", callback_data="buy_vip"), 
+         InlineKeyboardButton("🎫 Chipta sotib olish (4k)", callback_data="buy_ticket")],
         [InlineKeyboardButton("💳 Pul yechish", callback_data="withdraw"),
          InlineKeyboardButton("🎁 Promokod kiritish", callback_data="use_promo")],
         [InlineKeyboardButton("📊 Shaxsiy statistika", callback_data="my_stats")]
     ]
     
     if user_id == ADMIN_ID:
-        buttons.append([InlineKeyboardButton("👑 SHOX Boshqaruv Paneli", callback_data="admin_panel")])
+        buttons.append([InlineKeyboardButton("👑 SHOX Admin Panel", callback_data="admin_panel")])
         
     reply_markup = InlineKeyboardMarkup(buttons)
     if update.message:
@@ -130,7 +128,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=reply_markup)
 
-# 🎛 TUGMALAR ISHLOVCHISI
+# 🎛 INLINE TUGMALAR ISHLOVCHISI (DETALLASHTIRILGAN)
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -141,15 +139,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "to_main":
         await start(update, context)
 
-    # 🎰 O'YIN O'YNASh
+    # 🎰 O'YIN O'YNASh TIZIMI
     elif query.data == "play_game":
         is_vip = ud["vip_until"] > current_time
         
         if not is_vip and ud["tickets"] < 1:
             await query.edit_message_text(
-                "❌ *Afsuski chiptalaringiz tugadi uka!*\n\nG'ildirakni aylantirish uchun chipta sotib oling yoki 40,000 so'mga 24 soatlik cheksiz VIP rejimini yoqing!",
+                f"❌ *Sizda o'yin chiptasi yo'q uka!*\n\nG'ildirakni aylantirish uchun chipta sotib oling ({DB['settings']['ticket_price']} so'm) yoki 24 soatlik cheksiz VIP yoqing!",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎫 1 ta chipta olish (2,000 so'm)", callback_data="buy_ticket")],
+                    [InlineKeyboardButton(f"🎫 1 ta chipta sotib olish ({DB['settings']['ticket_price']} so'm)", callback_data="buy_ticket")],
                     [InlineKeyboardButton("👑 VIP rejimni yoqish (40,000 so'm)", callback_data="buy_vip")],
                     [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]
                 ])
@@ -162,10 +160,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["games_played"] += 1
         DB["stats"]["total_games"] += 1
         
-        await query.edit_message_text("🔄 *Omad g'ildiragi daxshatli aylanyapti...* \n[ 🟥 🟨 🟩 🟦 🟪 ]")
-        await asyncio.sleep(1)
-        await query.edit_message_text("🔄 *Sovg'a aniqlanyapti...* \n[ 💎 🎁 🎫 ❌ 💰 ]")
+        await query.edit_message_text("🔄 *Omad g'ildiragi mukammal aylanyapti...* \n[ 🟩 🟦 🟨 🟥 🟪 ]")
         await asyncio.sleep(0.8)
+        await query.edit_message_text("🔄 *Yutuq hisoblanmoqda...* \n[ 💰 🎁 🎫 ❌ 💰 ]")
+        await asyncio.sleep(0.6)
         
         prize = spin_wheel()
         result_text = f"🎰 *OMAD SHOU NATIJASI!* 🎉\n\nSizga daxshatli omad kulib boqdi:\n* {prize['name']} * \n\n"
@@ -177,29 +175,26 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_text += f"💵 Hisobingizga *+{prize['value']} so'm* qo'shildi!"
         elif prize["type"] == "ticket":
             ud["tickets"] += prize["value"]
-            result_text += f"🎫 Balansingizga *+{prize['value']} ta chipta* qo'shildi!"
-        elif prize["type"] == "code":
-            secret_code = "WIN-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
-            result_text += f"💎 Maxfiy Olmos kodi: `{secret_code}`\nBuni adminga topshirib olmosni yuklab oling!"
+            result_text += f"🎫 Hisobingizga *+{prize['value']} ta yangi chipta* qo'shildi!"
         else:
-            result_text += "🥺 Xavotir olmang, keyingi safar albatta yutasiz uka!"
+            result_text += "🥺 Xavotir olmang, keyingi safar albatta yirik pul yutasiz uka!"
             
         save_db()
         kb = [[InlineKeyboardButton("🎰 Yana aylantirish", callback_data="play_game")], [InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]
         await query.edit_message_text(result_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
-    # 🎫 CHIPTA SOTIB OLISH
+    # 🎫 CHIPTA SOTIB OLISH (PULLIK — 4,000 SO'M)
     elif query.data == "buy_ticket":
         if ud["balance"] < DB["settings"]["ticket_price"]:
             await query.edit_message_text(
-                f"❌ Balansda etarli mablag' yo'q uka. Balans: {ud['balance']} so'm.",
+                f"❌ Balansda etarli mablag' yo'q uka. 1 ta chipta: {DB['settings']['ticket_price']} so'm. Balans: {ud['balance']} so'm.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]])
             )
             return
         ud["balance"] -= DB["settings"]["ticket_price"]
         ud["tickets"] += 1
         save_db()
-        await query.edit_message_text("✅ 1 ta o'yin chiptasi muvaffaqiyatli sotib olindi!", 
+        await query.edit_message_text(f"✅ 1 ta o'yin chiptasi {DB['settings']['ticket_price']} so'mga sotib olindi!", 
                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 O'yinga kirish", callback_data="play_game")]]))
 
     # 👑 VIP REJIM SOTIB OLISH (40,000 SO'M)
@@ -211,26 +206,34 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         ud["balance"] -= DB["settings"]["vip_price"]
-        ud["vip_until"] = max(current_time, ud["vip_until"]) + 86400  # +24 soat
+        ud["vip_until"] = max(current_time, ud["vip_until"]) + 86400
         save_db()
-        await query.edit_message_text("🔥 daxshat! 24 soatlik cheksiz VIP obuna yoqildi. Endi tekinga aylantirasiz!", 
-                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 O'yinni boshlash", callback_data="play_game")]]))
+        await query.edit_message_text("🔥 Daxshat! 24 soatlik cheksiz VIP obuna yoqildi. Endi chiptasiz mutlaqo tekin aylantirasiz!", 
+                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎰 Cheksiz o'yinni boshlash", callback_data="play_game")]]))
 
-    # 💳 PUL YECHISH
+    # 💳 PUL YECHISH (TO'G'RIDAN-TO'G'RI LICHKANGIZGA O'TADIGAN QILINDI!)
     elif query.data == "withdraw":
         if ud["balance"] < DB["settings"]["min_withdraw"]:
             await query.edit_message_text(
-                f"❌ Minimal pul yechish miqdori: *{DB['settings']['min_withdraw']} so'm*.\nBalans: {ud['balance']} so'm.",
+                f"❌ Minimal pul yechish miqdori: *{DB['settings']['min_withdraw']} so'm*.\nSizning balansingiz: {ud['balance']} so'm uka.",
                 parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]])
             )
         else:
-            await query.edit_message_text(
-                f"💳 Balansizda pul bor uka: {ud['balance']} so'm.\n\nPulni yechish uchun ID kodingizni (`{user_id}`) admin @shox_admin ga yuboring!",
-                parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]])
+            txt = (
+                f"💳 *PUL YECHISH TIZIMI MUKAMMAL* uka\n\n"
+                f"Sizning balansingiz: *{ud['balance']} so'm*\n"
+                f"Sizning shaxsiy ID kodingiz: `{user_id}`\n\n"
+                f"⚠️ *Diqqat:* Pulni karta yoki telefon raqamingizga daxshatli tez yechib olish uchun pastdagi *'👑 Admin Lichkasi'* tugmasini bosing va adminga shaxsiy ID kodingizni yuboring!"
             )
+            # Lichkangizga havola beruvchi tugma
+            kb = [
+                [InlineKeyboardButton("👑 Admin Lichkasi (Shox)", url="https://t.me/shox_admin")],
+                [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]
+            ]
+            await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
     elif query.data == "use_promo":
-        await query.edit_message_text("🎁 *Promokod:* Maxfiy kodni to'g'ridan-to'g'ri chatga yozib yuboring (Masalan: `OMAD2026`).", 
+        await query.edit_message_text("🎁 *Promokod:* Admin bergan maxfiy pul kodini srazu chatning o'ziga yozib yuboring (Masalan: `OMAD2026`). Pulingiz avtomat hisobga o'tadi!", 
                                       parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
 
     elif query.data == "my_stats":
@@ -243,24 +246,24 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
 
-    # 👑 ADMIN PANEL
+    # 👑 MUKAMMAL ADMIN PANEL
     elif query.data == "admin_panel" and user_id == ADMIN_ID:
         txt = (
-            f"👑 *SHOX OMAD SHOU BOSHQARUV PANELI*\n\n"
-            f"👥 Jami ro'yxatdan o'tganlar: *{len(DB['users'])} ta*\n"
-            f"🎰 Jami o'ynalgan o'yinlar: *{DB['stats']['total_games']} marta*\n"
-            f"💰 Jami tarqatilgan bonuslar: *{DB['stats']['total_prizes_given']} so'm*\n"
+            f"👑 *SHOX PREMIUM ADMIN PANEL*\n\n"
+            f"👥 Jami oshiqlar (A'zolar): *{len(DB['users'])} ta*\n"
+            f"🎰 Jami aylantirilgan g'ildirak: *{DB['stats']['total_games']} marta*\n"
+            f"💰 Jami yutilgan summalar: *{DB['stats']['total_prizes_given']} so'm*\n"
             f"🎫 Aktiv promokodlar: *{len(DB['promocodes'])} ta*\n\n"
-            f"⚙️ *Admin buyruqlari (Chatga yozasiz):*\n"
-            f"🔸 `/plus ID PUL` — Balans qo'shish\n"
-            f"🔸 `/minus ID PUL` — Balansdan ayirish\n"
-            f"🔸 `/give_ticket ID SONI` — Tekin chipta berish\n"
-            f"🔸 `/genprom PUL` — Promokod yaratish\n"
-            f"🔸 `/setprice NARX` — VIP narxini o'zgartirish"
+            f"⚙️ *Admin boshqaruv buyruqlari:*\n"
+            f"🔹 `/plus ID PUL` — Hisob to'ldirish\n"
+            f"🔹 `/minus ID PUL` — Hisobdan ayirish\n"
+            f"🔹 `/give_ticket ID SONI` — Tekin chipta berish\n"
+            f"🔹 `/genprom PUL` — Promokod yaratish\n"
+            f"🔹 `/setprice NARX` — VIP narxini o'zgartirish"
         )
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]]))
 
-# 💬 FOYDALANUVCHIDAN XABAR KELGANDA (PROMOKOD TEKSHIRISH TIZIMI)
+# 💬 PROMOKOD TEKSHIRISH CHAT TIZIMI
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = check_user(user_id)
@@ -272,10 +275,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["balance"] += bonus_amount
         del DB["promocodes"][promo]
         save_db()
-        await update.message.reply_text(f"🎁 *Daxshatli Omad!* Promokod qabul qilindi. *+{bonus_amount} so'm* qo'shildi uka!")
+        await update.message.reply_text(f"🎁 *Daxshatli Omad!* Promokod qabul qilindi. Balansingizga *+{bonus_amount} so'm* tekin pul qo'shildi uka!")
         return
         
-    await update.message.reply_text("🎰 Omad shouni boshlash uchun pastdagi tugmani bosing uka!", 
+    await update.message.reply_text("🎰 Omad shouni daxshatli davom ettirish uchun pastdagi tugmani bosing uka!", 
                                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎮 O'yin menyusini ochish", callback_data="to_main")]]))
 
 # 👑 ADMIN COMMANDS FUNKSIYALARI
@@ -331,12 +334,12 @@ async def admin_genprom(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🎫 *Yangi universal Promokod yaratildi:* `{code}`\n💰 Qiymati: *{val} so'm*")
     except: pass
 
-# 🌐 FLASK WEB SERVER (RENDER UCHUN SRAZU CHURILADI)
+# 🌐 FLASK WEB SERVER (RENDER UCHUN ONLAYN SAQLASH)
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Omad Shou Mukammal Tizim Boti Daxshatli Onlayn!"
+    return "Mukammal Omad Shou Premium Boti Daxshatli Onlayn!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -371,5 +374,6 @@ if __name__ == '__main__':
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-    print("Omad Shou Tizimli Boti daxshatli ishga tushdi...")
+    print("Mukammal Omad Shou Premium boti ishga tushdi...")
     loop.run_until_complete(main_bot())
+        
