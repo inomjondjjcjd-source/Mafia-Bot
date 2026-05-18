@@ -4,6 +4,7 @@ import subprocess
 import asyncio
 import time
 import random
+import json
 from threading import Thread
 from flask import Flask
 
@@ -31,11 +32,34 @@ MAIN_ADMIN = 7920504062
 MY_LICHKA = "https://t.me/inomjondjjcjd"  
 CHANNEL_URL = "https://t.me/yzbedkslls"     
 
-# 💾 MA'LUMOTLAR OMBORI
+# 💾 DOIMIY FAYLLI MA'LUMOTLAR OMBORI (JSON)
+DATA_FILE = "user_database.json"
 USER_DATA = {}
 PROMO_CODES = {}  
 
-# 📝 200 TA SAVOLLAR BAZASI
+def load_data():
+    global USER_DATA
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                # JSON kalitlari har doim string bo'lgani uchun ularni qaytadan int (ID) ga o'giramiz
+                loaded = json.load(f)
+                USER_DATA = {int(k): v for k, v in loaded.items()}
+                print("Ma'lumotlar fayldan muvaffaqiyatli yuklandi.")
+        except Exception as e:
+            print(f"Faylni o'qishda xato: {e}")
+            USER_DATA = {}
+    else:
+        USER_DATA = {}
+
+def save_data():
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(USER_DATA, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Faylga yozishda xato: {e}")
+
+# 📝 SAVOLLAR BAZASI
 SAVOLLAR_BAZASI = [
     {"s": f"{a} + {b} = ?", "j": str(a + b)} for a in range(10, 30) for b in range(5, 15)
 ][:200]
@@ -56,11 +80,12 @@ def get_user_data(user_id):
             "history_wins": 0,
             "history_losses": 0
         }
+        save_data() # Yangi odam qo'shilsa srazu faylga yozamiz
     if user_id == MAIN_ADMIN:
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# 📱 STRUKTURALI KLAVIATURALAR
+# 📱 KLAVIATURALAR
 def get_main_menu_keyboard(user_id):
     keyboard = [
         [
@@ -89,6 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = get_user_data(user_id)
     ud["state"] = None
+    save_data()
     text = (
         "🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
         "Bu yerda siz o'yinlar o'ynashingiz, savollarga javob berib pul ishlashingiz va real daromad yig'ishingiz mumkin!\n\n"
@@ -96,7 +122,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
-# 📊 TUGMALAR MATNINI QAYTA ISHLOVCHI (CALLBACK)
+# 📊 CALLBACKS
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -106,6 +132,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "back_home":
         ud["state"] = None
+        save_data()
         text = (
             "🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
             f"💰 Balansingiz: *{ud['money']:,} so'm*"
@@ -139,6 +166,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gift = random.randint(100, 1500)
             ud["money"] += gift
             ud["last_bonus_time"] = now
+            save_data()
             await query.edit_message_text(f"🎁 Omad kuldi! Sizga *+{gift} so'm* hadya qilindi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
     elif query.data == "deposit_money":
@@ -163,8 +191,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("🚀 *Tezkor Pul Ishlash*\n\nPastdagi guruhga a'zo bo'ling va srazu 2,000 so'm balansga ega bo'ling:", parse_mode="Markdown", reply_markup=kb)
 
     elif query.data == "check_sub":
-        ud["money"] += 2000
-        ud["earned_fast_done"] = True
+        if not ud["earned_fast_done"]:
+            ud["money"] += 2000
+            ud["earned_fast_done"] = True
+            save_data()
         await query.edit_message_text("✅ Tabriklaymiz! Guruh tekshirildi, hisobingizga *+2,000 so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
     elif query.data == "earn_money":
@@ -176,15 +206,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if ud["questions_left"] <= 0 and (now - ud["last_quiz_time"] >= 18000):
             ud["questions_left"] = 12
+            save_data()
 
         q_idx = random.randint(0, len(SAVOLLAR_BAZASI)-1)
         ud["current_quiz_idx"] = q_idx
         ud["state"] = "wait_quiz_answer"
+        save_data()
         await query.edit_message_text(f"🔍 *Savol:* {SAVOLLAR_BAZASI[q_idx]['s']}\n\nTo'g'ri javob uchun *800 so'm* beriladi. Javobingizni yozing:", parse_mode="Markdown")
 
     elif query.data in ["play_ddz", "play_dart"]:
         gtype = "ddz" if query.data == "play_ddz" else "dart"
         ud["state"] = f"wait_bet_{gtype}"
+        save_data()
         await query.edit_message_text("💰 *Tikish miqdorini kiriting:*\n_(Minimal 600 so'm, Maksimal 5,000 so'm oralig'ida)_", parse_mode="Markdown")
 
     elif query.data == "admin_panel" and user_id == MAIN_ADMIN:
@@ -193,24 +226,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("➕ Promokod Yaratish", callback_data="adm_create_promo")],
             [InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]
         ])
-        await query.edit_message_text("👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\nBot imkoniyati 70% ga sozlandi! Kerakli amalni tanlang:", reply_markup=akb)
+        await query.edit_message_text("👑 *Eksklyuziv Admin Boshqaruv Markazi*\n\nBot imkoniyati 70% ga sozlandi va JSON himoyasi yoqildi! Amalni tanlang:", reply_markup=akb)
 
     elif query.data == "adm_change_balance" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_balance_mod"
-        await query.edit_message_text("💰 *Foydalanuvchi balansini boshqarish*\n\nPul qo'shish uchun: `ID +miqdor`\nPul ayirish uchun: `ID -miqdor` ko'rinishida yozing.\n\n*Masalan:* `7920504062 -15000` (Hisobidan 15,000 so'm ayiradi)", parse_mode="Markdown")
+        save_data()
+        await query.edit_message_text("💰 *Foydalanuvchi balansini boshqarish*\n\nPul qo'shish: `ID +miqdor`\nPul ayirish: `ID -miqdor` ko'rinishida yozing.\n\n*Masalan:* `7920504062 -15000`", parse_mode="Markdown")
 
     elif query.data == "adm_create_promo" and user_id == MAIN_ADMIN:
         ud["state"] = "wait_promo_creation"
-        await query.edit_message_text("✍️ Yangi promokod va narxini mana bunday formatda yozing:\n\n`PROMO5000 5000`")
+        save_data()
+        await query.edit_message_text("✍️ Yangi promokod va narxini yozing:\n\n`PROMO5000 5000`")
 
-# 💬 XABARLARNI FILTRLANGAN REJIMDA QABUL QILISH
+# 💬 MESSAGES
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
     ud = get_user_data(user_id)
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
-    # 🛑 ADMIN: BOSHQA ODAMLAR BALANSINI O'ZGARTIRISH (+ / -)
+    # 🛑 ADMIN: BALANSNI O'ZGARTIRISH
     if user_id == MAIN_ADMIN and ud["state"] == "wait_balance_mod":
         try:
             target_id, operation = text.split()
@@ -224,26 +259,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif operation.startswith("-"):
                 amount = int(operation.replace("-", ""))
                 target_ud["money"] -= amount
-                if target_ud["money"] < 0: target_ud["money"] = 0  # Balans minusga tushib ketmasligi uchun
+                if target_ud["money"] < 0: target_ud["money"] = 0  
                 msg = f"🔥 `ID: {target_id}` hisobidan *-{amount:,} so'm* muvaffaqiyatli ayirib olindi!"
             else:
                 raise ValueError
                 
             ud["state"] = None
+            save_data() # Faylga muhrlaymiz
             await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=back_keyboard)
         except:
-            await update.message.reply_text("❌ Xato kiritish! Namuna: `7920504062 -5000` yoki `7920504062 +10000`", reply_markup=back_keyboard)
+            await update.message.reply_text("❌ Xato kiritish! Namuna: `7920504062 -5000`", reply_markup=back_keyboard)
         return
 
-    # Promokod yaratish (Admin)
+    # Promokod yaratish
     if user_id == MAIN_ADMIN and ud["state"] == "wait_promo_creation":
         try:
             p_code, p_val = text.split()
             PROMO_CODES[p_code.upper()] = int(p_val)
             ud["state"] = None
-            await update.message.reply_text(f"✅ Muaffaqiyatli! `{p_code.upper()}` promokodi yaratildi. Qiymati: *{int(p_val):,} so'm*", parse_mode="Markdown", reply_markup=back_keyboard)
+            save_data()
+            await update.message.reply_text(f"✅ Muaffaqiyatli! `{p_code.upper()}` yaratildi. Narxi: *{int(p_val):,} so'm*", parse_mode="Markdown", reply_markup=back_keyboard)
         except:
-            await update.message.reply_text("❌ Xato format. Qayta urinib ko'ring.", reply_markup=back_keyboard)
+            await update.message.reply_text("❌ Xato format.", reply_markup=back_keyboard)
         return
 
     # Promokod kiritish
@@ -251,10 +288,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bonus_amt = PROMO_CODES[text.upper()]
         ud["money"] += bonus_amt
         del PROMO_CODES[text.upper()] 
-        await update.message.reply_text(f"🎉 Aktivlashdi! Promokod sizga *+{bonus_amt:,} so'm* taqdim etdi!", parse_mode="Markdown", reply_markup=back_keyboard)
+        save_data()
+        await update.message.reply_text(f"🎉 Aktivlashdi! *+{bonus_amt:,} so'm* qo'shildi!", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # Savol-javob mantiqi
+    # Savol-javob
     if ud["state"] == "wait_quiz_answer":
         q_idx = ud["current_quiz_idx"]
         correct_ans = SAVOLLAR_BAZASI[q_idx]['j']
@@ -266,21 +304,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if text == correct_ans:
             ud["money"] += 800
-            await update.message.reply_text(f"✅ To'g'ri javob! *+800 so'm* balansga qo'shildi. Qolgan savollar: {ud['questions_left']} ta", parse_mode="Markdown", reply_markup=back_keyboard)
+            save_data()
+            await update.message.reply_text(f"✅ To'g'ri javob! *+800 so'm* qo'shildi.", parse_mode="Markdown", reply_markup=back_keyboard)
         else:
-            await update.message.reply_text(f"❌ Noto'g'ri! To'g'ri javob `{correct_ans}` edi. Qolgan savollar: {ud['questions_left']} ta", parse_mode="Markdown", reply_markup=back_keyboard)
+            save_data()
+            await update.message.reply_text(f"❌ Noto'g'ri! To'g'ri javob `{correct_ans}` edi.", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
-    # O'yin tikish mantiqi (70% BOT YUTISH ALGORITMI)
+    # O'yin tikish (70% BOT YUTISH REJIM)
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
         if not text.isdigit():
-            await update.message.reply_text("❌ Faqat butun son ko'rinishida pul miqdorini yozing!")
+            await update.message.reply_text("❌ Faqat son kiriting!")
             return
         
         bet = int(text)
         if bet < 600 or bet > 5000: 
-            await update.message.reply_text("❌ Tikish taqiqlanadi! Minimal 600 so'm, maksimal 5,000 so'm tikish mumkin uka.")
+            await update.message.reply_text("❌ Minimal 600 so'm, maksimal 5,000 so'm tikish mumkin uka.")
             return
         if ud["money"] < bet and user_id != MAIN_ADMIN:
             await update.message.reply_text("❌ Hisobingizda yetarli mablag' mavjud emas!")
@@ -291,16 +331,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud["state"] = None
         ud["games_played"] += 1
 
-        # 🎰 ASOSIY 70% REJALASHGAN MATEMATIK ALGORITM
         is_win = False
-        
         if bet > 3000:
-            is_win = False # 3000 so'mdan yuqori tikilsa bot srazu yutadi
+            is_win = False 
         elif ud["games_played"] <= 2:
-            is_win = True  # Birinchi 2 ta o'yinda qasddan yutqazib beradi (tuzoq)
+            is_win = True  
         else:
-            # 🎯 70% BOT YUTADI, FOYDALANUVCHIGA FAQAT 30% CHANS QOLADI!
-            is_win = random.random() > 0.70 
+            is_win = random.random() > 0.70 # 70% Bot yutadi
 
         if is_win:
             ud["money"] += (bet * 2)
@@ -308,13 +345,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             res_txt = f"🏆 *Siz yutdingiz!*\n\nHisobingizga *+{bet*2:,} so'm* qo'shildi!"
         else:
             ud["history_losses"] += 1
-            res_txt = f"📉 *Bot g'alaba qozondi!*\n\nHisobingizdan *-{bet:,} so'm* yechildi. Keyingi safar omad keladi!"
+            res_txt = f"📉 *Bot g'alaba qozondi!*\n\nHisobingizdan *-{bet:,} so'm* yechildi!"
 
+        save_data() # O'yin natijasini darhol faylga muhrlash
         title = "✊ Don-Don-Ziki" if gmode == "ddz" else "🎯 Dart O'yini"
         await update.message.reply_text(f"🎮 *{title}*\n\n{res_txt}", parse_mode="Markdown", reply_markup=back_keyboard)
 
-# 🏁 BOTNI ISHGA TUSHIRISH
+# 🏁 RUN
 def main():
+    load_data() # Bot yonganda eski pullarni fayldan o'qib oladi
     Thread(target=run_server).start()
     app = Application.builder().token(TOKEN).build()
     
@@ -331,7 +370,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot 100% muvaffaqiyatli xatosiz ishga tushdi...")
+    print("Bot doimiy himoya bilan muvaffaqiyatli yondi...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
