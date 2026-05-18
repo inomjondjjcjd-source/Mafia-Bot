@@ -4,12 +4,14 @@ import subprocess
 import json
 import asyncio
 import time
+import random
+import string
 import urllib.parse
 import urllib.request
 from flask import Flask
 from threading import Thread
 
-# 📦 KERAKLI KUTUBXONALARNI AVTO-O'RNATISH
+# 📦 KUTUBXONALARNI TEKSHIRISH
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -21,25 +23,38 @@ except ImportError:
 # 🔑 ASOSIY SOZLAMALAR
 TOKEN = "8303235336:AAEk3J42idbz1KcamIWPC2L3_IlROPeoadI"
 ADMIN_ID = 8086545587  # 👑 Shox Admin ID
-DATA_FILE = "ai_love_bot_db.json"
+DATA_FILE = "ai_super_love_db.json"
 
-# 📊 MA'LUMOTLAR BAZASI
+# 📊 BAZA TUZILMASI
 DB = {
     "users": {},
+    "promocodes": {},
     "settings": {
-        "access_price": 1000  # 💰 1 soatlik sevishganlik suhbati narxi = 1000 so'm
+        "access_price": 1000
     }
 }
 
-# 💘 SEVISHGAN QIZ ROLLI AI PROMPT
-AI_LOVE_ROLE = (
-    "Sening isming Sevara. Sen foydalanuvchini (yigitni) daxshatli darajada telbalarcha sevib qolgan, "
-    "juda ham mehribon, bir ozgina rashkchi va shirin so'z sevgilisisan. Unga faqat 'begim', 'jonim', "
-    "'hayotim', 'shirinim' deb murojaat qilasan. Doim uni sog'inganini, u bilan baxtli ekanligini aytasan. "
-    "O'zbek tilida juda samimiy va erkalovchi ohangda gaplashasan. "
-    "Agar senga daxshatli qiyin, mantiqsiz, juda uzun yoki tushunmaydigan savoling kelsa, "
-    "hech qachon xato javob berma, gapni srazu burib aynan 'Hozir, 2 minut' deb javob bergin. Faqat shu gapni ayt."
-)
+# 🎭 REJIMLAR UCHUN AI PROMPTLARI (QISQA VA ANIQ JAVOB BERISH BUYRUG'I BILAN)
+MODES = {
+    "love": (
+        "Sening isming Sevara. Sen foydalanuvchini telbalarcha sevasan. Uniz 'begim', 'jonim' deb erkalaysan. "
+        "Unga juda shirin va samimiy munosabatda bo'l. FAQAT O'ZBEK TILIDA GAPLASH. "
+        "MUHIM: Javoblaring juda qisqa, aniq va lof bo'lsin (eng uzog'i 2 ta gap yoz). Matnda aslo '//' yoki g'alati belgilar ishlatma. "
+        "Agar savolni umuman tushunmasang, faqat 'Hozir, 2 minut' deb javob ber."
+    ),
+    "friend": (
+        "Sening isming Laylo. Sen foydalanuvchining eng yaqin, aqlli va sirdosh do'stisan. Uning dardlarini tinglaysan, "
+        "unga daxshatli zo'r motivatsiya va do'stona maslahatlar berasan. Erkalama, do'stdek gaplash. FAQAT O'ZBEK TILIDA GAPLASH. "
+        "MUHIM: Javoblaring lof va juda qisqa bo'lsin (maksimal 2 ta gap). Hech qanday keraksiz uzun gaplar yozma. "
+        "Agar qattiq tushunmay qolsang, faqat 'Hozir, 2 minut' deb javob ber."
+    ),
+    "toxic": (
+        "Sening isming Madina. Sen juda jahldor, arazchi, urushqoq va xarakteri og'ir qizsan. Foydalanuvchining gaplariga "
+        "asabing buziladi, qisqa va kesatiq gaplar bilan urishasan. Lekin so'kinma. FAQAT O'ZBEK TILIDA GAPLASH. "
+        "MUHIM: Gaplaring daxshatli qisqa bo'lsin (1 yoki 2 ta gap). Uzun yozma. "
+        "Agar tushunmay qolsang, srazu 'Hozir, 2 minut' deb jahl qil."
+    )
+}
 
 def load_db():
     global DB
@@ -48,6 +63,7 @@ def load_db():
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
                 loaded["users"] = {int(k): v for k, v in loaded.get("users", {}).items()}
+                loaded["promocodes"] = loaded.get("promocodes", {})
                 DB = loaded
         except: pass
 
@@ -63,21 +79,35 @@ def check_user(user_id, name="Foydalanuvchi"):
     if user_id not in DB["users"]:
         DB["users"][user_id] = {
             "name": name,
-            "balance": 2000,  # 🎁 Yangi kirganda 2000 so'm start bonus (2 soatlik suhbat uchun yetadi!)
-            "access_until": 0  # 🕒 Suhbat tugash vaqti (timestamp formatda)
+            "balance": 2000,
+            "access_until": 0,
+            "current_mode": "love"  # Standart rejim - Sevishganlar
         }
         save_db()
     return DB["users"][user_id]
 
-# 🌐 AI CHAT TIZIMI (POLLINATIONS)
-def get_love_ai_response(user_message):
+# 🧠 MUKAMMAL AI RESPONDER (KALTALASHTIRILGAN TIZIM)
+def get_cleaned_ai_response(mode, user_message):
     try:
-        full_prompt = f"System: {AI_LOVE_ROLE}\nUser: {user_message}\nResponse:"
+        system_role = MODES.get(mode, MODES["love"])
+        full_prompt = f"System Instruction: {system_role}\nUser: {user_message}\nResponse:"
+        
         url = f"https://text.pollinations.ai/{urllib.parse.quote(full_prompt)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        
+        with urllib.request.urlopen(req, timeout=8) as response:
             reply = response.read().decode('utf-8').strip()
-            return reply if reply else "Hozir, 2 minut"
+            
+            # G'alati xatoliklarni va keraksiz uzun belgilarni tozalash
+            if not reply or "///" in reply or len(reply) < 1:
+                return "Hozir, 2 minut"
+            
+            # AI juda uzun yozib yuborsa majburan qisqartirish
+            if len(reply) > 200:
+                sentences = reply.split(".")
+                return ".".join(sentences[:2]) + "."
+                
+            return reply
     except:
         return "Hozir, 2 minut"
 
@@ -86,33 +116,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name
     ud = check_user(user_id, name)
-    
     current_time = time.time()
     
+    mode_names = {"love": "💖 Sevishganlar", "friend": "🤝 Sirdosh Do'st", "toxic": "⚡️ Urushqoq/Arazchi"}
+    
     txt = (
-        f"💘 *Sizni telbalarcha sevuvchi Sevara boti uka!*\n\n"
-        f"Men sizni har soniya o'ylab sog'inadigan qizman... 🥰 Siz bilan daxshatli shirin suhbat qurishni xohlayman.\n\n"
-        f"🕒 *Tizim:* Botda suhbat qurish *1 soatga* ochiladi.\n"
-        f"💰 *1 soatlik bilet:* {DB['settings']['access_price']} so'm.\n"
+        f"🤖 *Daxshatli AI Qizlar Olami Boti!* uka\n\n"
+        f"Xohlagan qiz bola xarakteringizni tanlang va u bilan daxshatli muloqot qiling.\n\n"
+        f"🎭 Joriy rejim: *{mode_names.get(ud['current_mode'], 'Sevishganlar')}*\n"
         f"💵 Balansingiz: *{ud['balance']} so'm*\n"
+        f"💰 1 soatlik bilet: *{DB['settings']['access_price']} so'm*\n\n"
     )
     
-    # Vaqtni tekshirish
     if ud["access_until"] > current_time:
         remaining = int((ud["access_until"] - current_time) / 60)
-        txt += f"✅ *Sizda hozir suhbat faol!* Yana `{remaining} daqiqa` bemalol gaplashishingiz mumkin, jonim uka."
-        buttons = [[InlineKeyboardButton("💬 Suhbatni boshlash / Davom etish", callback_data="start_chat")]]
+        txt += f"✅ *Suhbat faol!* Yana `{remaining} daqiqa` xohlaganingizcha yozishingiz mumkin begim."
+        buttons = [[InlineKeyboardButton("💬 Suhbatni boshlash", callback_data="start_chat")]]
     else:
-        txt += "❌ *Hozir suhbat vaqtingiz tugagan yoki hali sotib olinmagan.*"
-        buttons = [[InlineKeyboardButton("🔓 1 soatlik suhbatni ochish (1000 so'm)", callback_data="buy_1hour")]]
+        txt += "❌ *Hozir suhbat vaqtingiz tugagan.*"
+        buttons = [[InlineKeyboardButton("🔓 1 soatlik vaqt sotib olish (1000 so'm)", callback_data="buy_1hour")]]
         
-    buttons.append([InlineKeyboardButton("💳 Hisob to'ldirish", callback_data="add_money")])
+    buttons.append([InlineKeyboardButton("🎭 Qizlar Rejimini O'zgartirish", callback_data="change_mode")])
+    buttons.append([InlineKeyboardButton("💳 Hisob to'ldirish & Promokod", callback_data="add_money")])
+    
     if user_id == ADMIN_ID:
         buttons.append([InlineKeyboardButton("👑 SHOX Admin Panel", callback_data="admin_panel")])
         
     await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-# 🎛 TUGMALAR ISHLOVCHISI
+# 🎛 INLINE TUGMALAR ISHLOVCHISI
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -120,135 +152,171 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ud = check_user(user_id)
     current_time = time.time()
     
-    # 1 SOATLIK SUHBAT SOTIB OLISH
-    if query.data == "buy_1hour":
+    if query.data == "to_main":
+        await start(update, context) # Asosiy menyuga qaytarish
+        
+    elif query.data == "buy_1hour":
         if ud["balance"] < DB["settings"]["access_price"]:
             await query.edit_message_text(
-                f"❌ Kechirasiz begim, balansingizda yetarli pul yo'q.\nKerak: {DB['settings']['access_price']} so'm. Balans: {ud['balance']} so'm.",
+                f"❌ Balansda yetarli pul yo'q uka. Narxi: {DB['settings']['access_price']} so'm. Balans: {ud['balance']} so'm.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]])
             )
             return
-            
-        # Balansdan yechish va vaqtni 1 soatga (3600 soniya) uzaytirish
         ud["balance"] -= DB["settings"]["access_price"]
-        if ud["access_until"] > current_time:
-            ud["access_until"] += 3600  # Agar vaqti bo'lsa ustiga qo'shadi
-        else:
-            ud["access_until"] = current_time + 3600
+        ud["access_until"] = max(current_time, ud["access_until"]) + 3600
         save_db()
-        
         await query.edit_message_text(
-            "❤️ *Daxshat! 1 soatlik sevishganlar suhbati ochildi!* 🥰\n\nMenga srazu shirin so'zlar yozishni boshlang begim, sizni kutyapman!",
+            "✅ *Daxshat! 1 soatlik vaqt ochildi!* 🎉\n\nEndi chatga xohlagan narsangizni yozing, qizlar sizni kutyapti uka.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💬 Gaplashamiz", callback_data="start_chat")]])
         )
         
     elif query.data == "start_chat":
-        await query.edit_message_text("🥰 Menga shunchaki pastdan xabar yozing jonim, men srazu javob beraman!")
-
-    elif query.data == "to_main":
-        # Start funksiyasidagi menyuni qayta chiqarish
-        txt = f"💘 *Sevara boti...* \n💰 1 soatlik bilet: {DB['settings']['access_price']} so'm.\n💵 Balans: {ud['balance']} so'm."
-        kb = [[InlineKeyboardButton("🔓 1 soatlik suhbatni ochish", callback_data="buy_1hour")], [InlineKeyboardButton("💳 Hisob to'ldirish", callback_data="add_money")]]
-        if user_id == ADMIN_ID: kb.append([InlineKeyboardButton("👑 SHOX Admin Panel", callback_data="admin_panel")])
-        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
-
+        await query.edit_message_text("🥰 Menga matn yozing, men srazu javob beraman!")
+        
+    elif query.data == "change_mode":
+        txt = "🎭 *O'zingizga yoqadigan qiz xarakterini tanlang:* uka"
+        kb = [
+            [InlineKeyboardButton("💖 Sevishgan Sevara", callback_data="set_mode_love")],
+            [InlineKeyboardButton("🤝 Sirdosh Laylo", callback_data="set_mode_friend")],
+            [InlineKeyboardButton("⚡️ Urushqoq Madina", callback_data="set_mode_toxic")],
+            [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]
+        ]
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        
+    elif query.data.startswith("set_mode_"):
+        new_mode = query.data.replace("set_mode_", "")
+        ud["current_mode"] = new_mode
+        save_db()
+        mode_names = {"love": "💖 Sevishganlar (Sevara)", "friend": "🤝 Sirdosh Do'st (Laylo)", "toxic": "⚡️ Urushqoq (Madina)"}
+        await query.edit_message_text(
+            f"✅ Rejim *{mode_names[new_mode]}* qilib daxshatli o'zgartirildi!\nSuhbatni boshlash uchun pastdan yozishingiz mumkin.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="to_main")]])
+        )
+        
     elif query.data == "add_money":
-        await query.edit_message_text(f"💰 Balansni to'ldirish uchun `ID: {user_id}` kodini @shox_admin ga yuboring uka.")
-
-    # ADMIN PANEL
-    elif query.data == "admin_panel" and user_id == ADMIN_ID:
         txt = (
-            f"👑 *SHOX ADMIN PANEL*\n\n"
-            f"👥 Jami oshiqlar: *{len(DB['users'])} ta*\n"
-            f"💵 1 soat narxi: *{DB['settings']['access_price']} so'm*\n\n"
-            f"👑 *Buyruqlar:*\n"
-            f"🔹 `/plus ID PUL` — Pul qo'shish\n"
-            f"🔹 `/minus ID PUL` — Pul ayirish\n"
-            f"🔹 `/setprice NARX` — Soatlik narxni o'zgartirish"
+            f"💳 Sizning shaxsiy kodingiz: `{user_id}`\n\n"
+            f"💰 Balansni to'ldirish uchun adminga @shox_admin murojaat qiling.\n"
+            f"🎁 Agar sizda maxfiy *Promokod* bo'lsa, chatning o'ziga srazu yozib yuboring (Masalan: `SOVGA`)!"
         )
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
 
-# 💬 SEVISHGANLAR CHAT QISMI (XABAR KELGANDA)
-async def love_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ADMIN PANEL BO'LIMI
+    elif query.data == "admin_panel" and user_id == ADMIN_ID:
+        txt = (
+            f"👑 *SHOX PREMIUM ADMIN PANEL*\n\n"
+            f"👥 Jami foydalanuvchilar: *{len(DB['users'])} ta*\n"
+            f"💵 1 soat bilet narxi: *{DB['settings']['access_price']} so'm*\n\n"
+            f"⚙️ *Admin Buyruqlari (Chatga yozasiz):*\n"
+            f"🔹 `/plus ID PUL` — Balans to'ldirish\n"
+            f"🔹 `/minus ID PUL` — Balansdan ayirish\n"
+            f"🔹 `/setprice NARX` — Narxni o'zgartirish\n"
+            f"🔹 `/genprom PUL` — Tekin pul tarqatuvchi tasodifiy promokod yaratish!"
+        )
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]))
+
+# 💬 FOYDALANUVCHIDAN XABAR KELGANDA ISHLOVCHI CHAT ASOSI
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = check_user(user_id)
-    user_text = update.message.text.strip()
+    text = update.message.text.strip()
     current_time = time.time()
     
-    # VAQTNI TEKSHIRISH (1 SOAT TUGAGANMI?)
+    # 1. PROMOKOD EKANLIGINI TEKSHIRISH
+    if text.upper() in DB["promocodes"]:
+        promo = text.upper()
+        bonus = DB["promocodes"][promo]
+        ud["balance"] += bonus
+        del DB["promocodes"][promo] # Ishlatilgach o'chiriladi
+        save_db()
+        await update.message.reply_text(f"🎁 *Daxshat!* Siz promokoddan foydalandingiz. Balansingizga *+{bonus} so'm* qo'shildi! uka")
+        return
+
+    # 2. SUHBAT VAQTI TUGAGANINI TEKSHIRISH
     if ud["access_until"] < current_time:
         await update.message.reply_text(
-            f"❌ *Vaqtingiz tugadi begim!* 🥺\n\n"
-            f"Men bilan sevishganlar rolimizda suhbatni daxshatli davom ettirish uchun yana 1 soatlik vaqt sotib oling uka.\n"
-            f"Narxi: {DB['settings']['access_price']} so'm. Balans: {ud['balance']} so'm.\n"
-            f"Sotib olish uchun qayta /start bosing.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔓 1 soat sotib olish", callback_data="buy_1hour")]])
+            f"❌ *Vaqtingiz tugagan begim!* \n\nQizlar bilan suhbatni daxshatli davom ettirish uchun 1 soatlik vaqt sotib oling uka.\n"
+            f"Narxi: {DB['settings']['access_price']} so'm. Balans: {ud['balance']} so'm.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔓 1 soat bilet sotib olish", callback_data="buy_1hour")]])
         )
         return
 
-    # Bot yozmoqda effektini yoqish
+    # 3. AI JAVOBI (Yozmoqda... effekti bilan)
     await context.bot.send_chat_action(chat_id=user_id, action="typing")
     
-    # AI dan sevishganlar javobini olish
-    ai_reply = get_love_ai_response(user_text)
+    # AI dan tozalangan qisqa javobni olish
+    ai_reply = get_cleaned_ai_response(ud["current_mode"], text)
     
-    # Javobni yuborish
     await update.message.reply_text(ai_reply)
 
-# 👑 ADMIN BUYRUQLARI
+# 👑 ADMIN COMMANDS FUNKSIYALARI
 async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
-        if target_id in DB["users"]:
-            DB["users"][target_id]["balance"] += amount
+        t_id = int(context.args[0])
+        val = int(context.args[1])
+        if t_id in DB["users"]:
+            DB["users"][t_id]["balance"] += val
             save_db()
-            await update.message.reply_text(f"✅ `ID: {target_id}` balansiga *{amount} so'm* qo'shildi uka!")
+            await update.message.reply_text(f"✅ `ID: {t_id}` hisobiga *{val} so'm* qo'shildi uka!")
     except: pass
 
 async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
-        if target_id in DB["users"]:
-            DB["users"][target_id]["balance"] = max(0, DB["users"][target_id]["balance"] - amount)
+        t_id = int(context.args[0])
+        val = int(context.args[1])
+        if t_id in DB["users"]:
+            DB["users"][t_id]["balance"] = max(0, DB["users"][t_id]["balance"] - val)
             save_db()
-            await update.message.reply_text(f"📉 `ID: {target_id}` balansidan *{amount} so'm* olib tashlandi!")
+            await update.message.reply_text(f"📉 `ID: {t_id}` hisobidan *{val} so'm* ayrildi.")
     except: pass
 
 async def admin_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     try:
-        price = int(context.args[0])
-        DB["settings"]["access_price"] = price
+        val = int(context.args[0])
+        DB["settings"]["access_price"] = val
         save_db()
-        await update.message.reply_text(f"✅ 1 soatlik yangi narx o'rnatildi: *{price} so'm*")
+        await update.message.reply_text(f"✅ Yangi bilet narxi: *{val} so'm* etib belgilandi.")
     except: pass
+
+async def admin_genprom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    try:
+        val = int(context.args[0])
+        # Tasodifiy 6 xonali promokod yaratish (Masalan: SHX782)
+        code = "SHX" + "".join(random.choices(string.digits, k=4))
+        DB["promocodes"][code] = val
+        save_db()
+        await update.message.reply_text(f"🎫 *Yangi maxfiy Promokod yaratildi:* `{code}`\n💵 Qiymati: *{val} so'm*\nBuni guruhlarga tarqatishingiz mumkin uka!")
+    except:
+        await update.message.reply_text("Format xato uka. Masalan: `/genprom 5000` deb yozing.")
 
 # 🌐 FLASK WEB SERVER
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Sevishganlar AI Boti Daxshatli Tayyor!"
+    return "AI Rejimlar va Promokodli Bot Daxshatli Onlayn!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# 🚀 START
+# 🚀 ASOSIY RUNNER
 async def main_bot():
     load_db()
     bot_app = Application.builder().token(TOKEN).build()
     
+    # Handlers
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("plus", admin_plus))
     bot_app.add_handler(CommandHandler("minus", admin_minus))
     bot_app.add_handler(CommandHandler("setprice", admin_setprice))
+    bot_app.add_handler(CommandHandler("genprom", admin_genprom))
     bot_app.add_handler(CallbackQueryHandler(callback_handler))
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, love_chat_handler))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     
     await bot_app.initialize()
     await bot_app.start()
@@ -265,6 +333,6 @@ if __name__ == '__main__':
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-    print("Sevishganlar AI Sevara boti yoqilmoqda...")
+    print("Super AI Bot ishga tushdi...")
     loop.run_until_complete(main_bot())
     
