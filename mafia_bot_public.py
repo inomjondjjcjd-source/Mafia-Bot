@@ -3,7 +3,7 @@ import sys
 import subprocess
 import time
 
-# Loyihang uchun kerakli kutubxonalarni tekshirish
+# SIZNING ASOSIY KUTUBXONANGIZ (PYTHON-TELEGRAM-BOT V21+)
 try:
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -15,7 +15,7 @@ except ImportError:
 from threading import Thread
 from flask import Flask
 
-# SERVER PORTINI SOZLASH
+# SERVER PORTINI SOZLASH (RENDER UCHUN)
 server = Flask('')
 @server.route('/')
 def home(): return "Bot To'liq Rejimda Aktiv!"
@@ -24,11 +24,11 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# ENGINA ASOSIY PARAMETRLARING
+# ASOSIY PARAMETRLAR
 TOKEN = "8443418214:AAHtuz30gPUOF6qpNOSZrd8MnOwGG7nhbOA"
 MAIN_ADMIN = 7920504062
 
-# Foydalanuvchilar ma'lumotlar bazasi xotirasi
+# FOYDALANUVCHILAR BAZASI
 USER_DATA = {}
 
 def get_user_data(user_id):
@@ -45,22 +45,31 @@ def get_user_data(user_id):
         USER_DATA[user_id]["money"] = 999999999
     return USER_DATA[user_id]
 
-# BARCHA TUGMALARINGNI QAYTARISH (MUKAMMAL MENYU)
+# 🎰 SIZ AYTGAN ASOSIY KATTA MENYU (HAMMA TUGMALAR SHU YERDA)
 def get_main_menu_keyboard(user_id):
     keyboard = [
-        [InlineKeyboardButton("🎮 Don-Don-Ziki O'ynash", callback_data="play_ddz"),
-         InlineKeyboardButton("🎯 Dart O'ynash", callback_data="play_dart")],
-        [InlineKeyboardButton("🔍 Pul Qidirmoq (Savol)", callback_data="earn_money"),
-         InlineKeyboardButton("🗄 Shaxsiy Kabinet", callback_data="personal_cabinet")],
-        [InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit_money"),
-         InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw_money")],
-        [InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="get_bonus"),
-         InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn_fast")]
+        [
+            InlineKeyboardButton("🎰 Don-Don-Ziki O'ynash", callback_data="play_ddz"),
+            InlineKeyboardButton("🎯 Dart O'ynash", callback_data="play_dart")
+        ],
+        [
+            InlineKeyboardButton("🔍 Pul Qidirmoq (Savoll)", callback_data="earn_money"),
+            InlineKeyboardButton("🗄 Shaxsiy Kabinet", callback_data="personal_cabinet")
+        ],
+        [
+            InlineKeyboardButton("💳 Pul kiritish", callback_data="deposit_money"),
+            InlineKeyboardButton("💸 Pul yechish", callback_data="withdraw_money")
+        ],
+        [
+            InlineKeyboardButton("🎁 2 Soatlik Bonus", callback_data="get_bonus"),
+            InlineKeyboardButton("🚀 Pul ishlash (4,000 UZS)", callback_data="earn_fast")
+        ]
     ]
     if user_id == MAIN_ADMIN:
         keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
     return InlineKeyboardMarkup(keyboard)
 
+# /START BUYRUG'I
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     ud = get_user_data(user_id)
@@ -72,6 +81,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
+# TUGMALAR BOSILGANDA ISHLAYDIGAN TIZIM
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -82,7 +92,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "back_home":
         ud["state"] = None
-        text = f"🎰 *Martin Kazino*\n\n💰 Sening hisobing: *{ud['money']:,} so'm*"
+        text = (
+            "🎰 *Martin Kazino Botiga Xush Kelibsiz!*\n\n"
+            f"💰 Sening hisobing: *{ud['money']:,} so'm*\n\n"
+            "O'yin o'ynash va pul ishlash uchun tugmalarni bosing:"
+        )
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_main_menu_keyboard(user_id))
 
     elif query.data == "personal_cabinet":
@@ -107,7 +121,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gift = random.randint(1000, 3000)
             ud["money"] += gift
             ud["last_bonus_time"] = now
-            await query.edit_message_text(f"🎁 Senga *+{gift:,} so'm* bonus berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
+            await query.edit_message_text(f"🎁 Senga *+{gift:,} so'm* 2 soatlik bonus berildi!", parse_mode="Markdown", reply_markup=back_keyboard)
 
     elif query.data == "withdraw_money":
         if ud["money"] < 5000:
@@ -130,10 +144,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(admin_text, parse_mode="Markdown", reply_markup=back_keyboard)
 
-    else:
-        # Boshqa tugmalar uchun standart javob
-        await query.edit_message_text("⏳ Bu bo'lim hozircha ishlab chiqilmoqda...", reply_markup=back_keyboard)
+    elif query.data in ["earn_money", "deposit_money", "earn_fast"]:
+        await query.edit_message_text("⏳ Bu bo'lim hozircha sozlanmoqda, tez kunda aktivlashadi!", reply_markup=back_keyboard)
 
+# MATNLI XABARLAR VA ADMIN BUYRUQLARI
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
@@ -141,12 +155,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="back_home")]])
 
+    # KARTA MA'LUMOTLARINI YIG'ISH FUNKSIYASI
     if ud["state"] == "wait_card_info":
         ud["card_number"] = text
         ud["state"] = None
         await update.message.reply_text("✅ *Arizangiz qabul qilindi!* Tez orada adminlar hisobingizga pulni o'tkazib berishadi.", parse_mode="Markdown", reply_markup=back_keyboard)
         return
 
+    # ADMIN PANEL BUYRUQLARI
     if user_id == MAIN_ADMIN and ud["state"] == "wait_admin_cmd":
         try:
             if "+" in text:
@@ -166,11 +182,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Xato! Namuna: `7920504062 +10` yoki `7920504062 5000`", reply_markup=back_keyboard)
         return
 
+    # O'YIN TIKISH TIZIMI
     if ud["state"] and ud["state"].startswith("wait_bet_"):
         gmode = ud["state"].split("_")[2]
+        import re
         clean_text = re.sub(r'[.,\s]', '', text)
         if not clean_text.isdigit():
-            await update.message.reply_text("❌ Xato! Faqat raqam kiriting.")
+            await update.message.reply_text("❌ Xato! Faqat toza raqam kiriting.")
             return
         
         bet = int(clean_text)
@@ -178,19 +196,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Tikish miqdori 100 - 5,000 so'm oralig'ida bo'lishi kerak!")
             return
         if ud["money"] < bet and user_id != MAIN_ADMIN:
-            await update.message.reply_text("❌ Hisobingizda pul yetarli emas!")
+            await update.message.reply_text("❌ Hisobingizda yetarli pul yoʻq!")
             return
 
         if user_id != MAIN_ADMIN:
             ud["money"] -= bet
         ud["state"] = None
 
+        # 🎮 DON-DON-ZIKI O'YINI
         if gmode == "ddz":
             if random.random() < 0.4:
                 ud["money"] += (bet * 2)
                 await update.message.reply_text(f"🎮 *Don-Don-Ziki*\n\n🏆 Yutdingiz! Hisobingizga *+{bet*2:,} so'm* qo'shildi.", parse_mode="Markdown", reply_markup=back_keyboard)
             else:
                 await update.message.reply_text(f"🎮 *Don-Don-Ziki*\n\n📉 Afsuski yutqazdingiz! Hisobingizdan *-{bet:,} so'm* ketdi.", parse_mode="Markdown", reply_markup=back_keyboard)
+        
+        # 🎯 DART O'YINI
         else:
             u_s = random.randint(1, 6)
             b_s = random.randint(1, 6)
@@ -208,19 +229,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     Thread(target=run_server).start()
     
-    # TELEGRAMDAGI TIQILIB QOLGAN WEBHOOKNI TOZALASH (ENG ASOSIY JADU)
+    # WEBHOOK TOZALASH TIZIMI
     app = Application.builder().token(TOKEN).build()
-    
-    # Polling boshlashdan oldin eski ulanishlarni o'chirish
     app.bot.delete_webhook(drop_pending_updates=True)
     time.sleep(1)
     
+    # HANDLERLARNI RO'YXATDAN O'TKAZISH
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print("Bot eski rejimi tiklandi va ishga tushirildi...")
+    print("Bot barcha tugmalari bilan to'liq ishga tushdi...")
     app.run_polling()
 
 if __name__ == '__main__':
     main()
+        
