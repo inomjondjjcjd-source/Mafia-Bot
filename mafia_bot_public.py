@@ -9,18 +9,16 @@ from threading import Thread
 # Kutubxonalarni xavfsiz tekshirish va o'rnatish
 try:
     import nest_asyncio
-    import httpx
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0", "httpx==0.27.0"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
     import nest_asyncio
-    import httpx
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# Event loop va render muammosini tuzatish
+# Event loop va render muammolarini tuzatish
 nest_asyncio.apply()
 
 # --- SOZLAMALAR ---
@@ -268,14 +266,8 @@ def main():
     load_db()
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    # Eng xavfsiz va to'g'ri bog'lanish sozlamasi:
-    # Ortiqcha builder parametrlari olib tashlandi, timeoutlar httpx ichida boshqariladi
-    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=60.0)
-    
-    bot = Application.builder().token(TOKEN).request(clean_client).build()
+    # Render muhitida ishlashi uchun eng toza va standart 'Application' sozlamasi
+    bot = Application.builder().token(TOKEN).build()
     
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
@@ -290,4 +282,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
+    
