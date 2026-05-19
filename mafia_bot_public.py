@@ -3,20 +3,21 @@ import json
 import random
 import time
 import urllib.request
+import urllib.parse
 from flask import Flask
 from threading import Thread
 
-# Faqat bitta to'g'ri kutubxonadan foydalanamiz
 import telebot
 from telebot import types
 
 # --- ASOSIY SOZLAMALAR ---
 TOKEN = "8691200742:AAHWVQwjNLXHTuYBU3sI9TdroKMcZZ0C0aA"
 ADMIN_ID = 8086545587
-DATA_FILE = "mega_games_bot_db.json"
+RENDER_URL = "https://mafia-bot-1-cfws.onrender.com"
 
-# DIQQAT: Mana shu havolani Render sahifangizdagi "Primary URL" bilan bir xil qiling!
-RENDER_URL = "https://mafia-bot-1-cfws.onrender.com" 
+# --- INTERNETDAGI O'CHMAS BAZA (KVDB.IO) ---
+# Pullar va ma'lumotlar o'chib ketmasligi uchun tekin onlayn baza yaratamiz
+KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/mega_games_db"
 
 bot = telebot.TeleBot(TOKEN)
 DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05]}}
@@ -24,20 +25,24 @@ APPLE_COEFFS = [1.23, 1.54, 1.93, 2.41, 3.02, 4.02, 5.70, 8.55, 13.43, 20.15, 30
 
 def load_db():
     global DB
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                d = json.load(f)
-                DB["users"] = {int(k): v for k, v in d.get("users", {}).items()}
-                DB["settings"] = d.get("settings", {})
-                if "aviator_history" not in DB["settings"]: DB["settings"]["aviator_history"] = [2.34, 1.55, 4.12, 1.22, 3.05]
-        except: pass
+    try:
+        req = urllib.request.Request(KVDB_URL, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read().decode("utf-8"))
+            DB["users"] = {int(k): v for k, v in data.get("users", {}).items()}
+            DB["settings"] = data.get("settings", {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05]})
+            print("🚀 Baza internetdan muvaffaqiyatli yuklandi!")
+    except Exception as e:
+        print(f"⚠️ Bazani yuklashda xato (Yangi baza ochiladi): {e}")
 
 def save_db():
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f: 
-            json.dump({"users": {str(k): v for k, v in DB["users"].items()}, "settings": DB["settings"]}, f, indent=4, ensure_ascii=False)
-    except: pass
+        payload = json.dumps({"users": {str(k): v for k, v in DB["users"].items()}, "settings": DB["settings"]}).encode("utf-8")
+        req = urllib.request.Request(KVDB_URL, data=payload, method="PUT", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            pass
+    except Exception as e:
+        print(f"⚠️ Bazani saqlashda xato: {e}")
 
 def check_user(uid, name="Foydalanuvchi"):
     if uid not in DB["users"]:
@@ -134,7 +139,7 @@ def callback_handler(call):
         mode = call.data.split("_")[2]
         DB["settings"]["next_aviator"] = None if mode == "rand" else float(mode)
         save_db()
-        bot.answer_callback_query(call.id, f"Sozlama saqlandi!")
+        bot.answer_callback_query(call.id, "Sozlama saqlandi!")
         callback_handler(call)
 
     elif call.data in ["ad_give_money", "ad_give_ticket"] and uid == ADMIN_ID:
@@ -274,7 +279,7 @@ def show_apple(message_obj, ud, is_admin):
 
 def start_aviator_game(message_obj, ud, bet, uid, is_ticket=False):
     if not is_ticket: ud["balance"] -= bet
-    crash = DB["settings"].get("next_aviator") if DB["settings"].get("next_aviator") else round(random.uniform(1.15, 7.0), 2)
+    crash = DB["settings"].get("next_aviator") if DB["settings"].get("next_aviator") else round(random.uniform(1.15, 6.0), 2)
     DB["settings"]["next_aviator"] = None
     ud["aviator_game"] = {"current_win": 1.0, "crash": crash, "bet": bet, "status": "flying"}
     ud["state"] = None
@@ -283,12 +288,12 @@ def start_aviator_game(message_obj, ud, bet, uid, is_ticket=False):
 
 def run_realtime_aviator(chat_id, message_id, uid):
     while True:
-        time.sleep(0.2)
+        time.sleep(0.4)  # Tezlik Render bloklamasligi uchun optimallashtirildi
         ud = DB["users"].get(uid)
         if not ud or not ud.get("aviator_game") or ud["aviator_game"]["status"] != "flying": break
         ag = ud["aviator_game"]
         
-        step = random.uniform(0.04, 0.08) if ag["current_win"] < 3.0 else random.uniform(0.12, 0.25)
+        step = random.uniform(0.05, 0.12)
         ag["current_win"] = round(ag["current_win"] + step, 2)
         
         if ag["current_win"] >= ag["crash"]:
@@ -302,25 +307,21 @@ def run_realtime_aviator(chat_id, message_id, uid):
             except: pass
             break
             
-        save_db()
         current_payout = int(ag["bet"] * ag["current_win"])
         kb = types.InlineKeyboardMarkup()
         kb.add(types.InlineKeyboardButton(f"🛑 CASHOUT ({current_payout})", callback_data="av_realtime_cashout"))
         
         cheat = f" 🕵️‍♂️ `[PORTLASH: x{ag['crash']}]`" if uid == ADMIN_ID else ""
-        
         try: bot.edit_message_text(f"✈️ *AVIATOR LIVE*{cheat}\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", chat_id, message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
-# --- KUCHAYTIRILGAN ANTI-SLEEP PINGER (HAR 120 SONIYADA) ---
 def keep_alive():
     while True:
-        time.sleep(120)  # Kutish vaqtini 2 daqiqaga tushirdik, server uxlashga ulgurmaydi
+        time.sleep(120)
         try:
             urllib.request.urlopen(RENDER_URL)
-            print("🚀 Anti-Sleep: Server faol tutib turilibdi!")
-        except Exception as e:
-            print(f"⚠️ Anti-Sleep xabari: {e}")
+            print("🚀 Anti-Sleep faol!")
+        except: pass
 
 @bot.message_handler(func=lambda msg: True)
 def text_handler(msg):
@@ -369,12 +370,10 @@ def home(): return "OK"
 
 def main():
     load_db()
-    # Port sozlamalari
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
-    # Uyg'otuvchi tizimni ishga tushirish
     Thread(target=keep_alive, daemon=True).start()
     bot.infinity_polling(skip_pending=True)
 
 if __name__ == '__main__':
     main()
-        
+                                   
