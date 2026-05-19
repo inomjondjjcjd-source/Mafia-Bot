@@ -205,4 +205,4 @@ async def show_apple(q, ud, is_admin_cheat):
     kb.append([InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")])
     
     await q.edit_message_text(f"🍏 *APPLE OF FORTUNE* (13 Bosqich)\nEtap: {crow+1}/13\n📈 Keyingi koeff: x{APPLE_COEFFS[crow] if crow < 13 else 69.48}\n💵 Yutuq qiymati: {ag['payout']} so'm", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        
+                      
