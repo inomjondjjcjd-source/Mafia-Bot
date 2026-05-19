@@ -6,7 +6,7 @@ import time
 from flask import Flask
 from threading import Thread
 
-# Kutubxonalarni toza va faqat telebot uchun o'rnatish
+# Kutubxonalarni Render'da toza o'rnatish
 try:
     import telebot
     from telebot import types
@@ -17,7 +17,7 @@ except ImportError:
     from telebot import types
 
 # --- ASOSIY SOZLAMALAR ---
-TOKEN = "8303235336:AAHkjNihtbYY5QeSm9H2H2DBHyFgg6Fyd_s"
+TOKEN = "8691200742:AAHWVQwjNLXHTuYBU3sI9TdroKMcZZ0C0aA"
 ADMIN_ID = 8086545587
 DATA_FILE = "mega_games_bot_db.json"
 
@@ -121,7 +121,7 @@ def callback_handler(call):
         try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
         except: pass
 
-    # --- ADMIN DASHBOARD ---
+    # --- ADMIN TIZIMI ---
     elif call.data == "admin_dashboard" and uid == ADMIN_ID:
         total_users = len(DB["users"])
         total_balance = sum([u.get("balance", 0) for u in DB["users"].values()])
@@ -249,7 +249,7 @@ def callback_handler(call):
         try: bot.edit_message_text(f"💰 *CASHOUT DONE!*\n📈 Koeffitsiyent: *x{ag['current_win']}*\n💰 Balansga qo'shildi: +{win} so'm!", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
-# --- O'YINLAR MANTIQI ---
+# --- O'YINLARNING ASOSIY FUNKSIYALARI ---
 def start_apple_game(message_obj, ud, bet, uid, is_ticket=False):
     if not is_ticket: ud["balance"] -= bet
     grid = []
@@ -292,12 +292,12 @@ def start_aviator_game(message_obj, ud, bet, uid, is_ticket=False):
 
 def run_realtime_aviator(chat_id, message_id, uid):
     while True:
-        time.sleep(0.2)  # HAR 0.2 SONIYADA UCHISH TEZLIGI
+        time.sleep(0.2) # HAR 0.2 SONIYADA YANGILANISH TEZLIGI
         ud = DB["users"].get(uid)
         if not ud or not ud.get("aviator_game") or ud["aviator_game"]["status"] != "flying": break
         ag = ud["aviator_game"]
         
-        # Grafik chiziqli o'sish koeffitsiyenti
+        # Samolyot koeffitsiyentining real o'sish qadami
         step = random.uniform(0.04, 0.08) if ag["current_win"] < 3.0 else random.uniform(0.12, 0.25)
         ag["current_win"] = round(ag["current_win"] + step, 2)
         
@@ -317,7 +317,6 @@ def run_realtime_aviator(chat_id, message_id, uid):
         kb = types.InlineKeyboardMarkup()
         kb.add(types.InlineKeyboardButton(f"🛑 CASHOUT ({current_payout})", callback_data="av_realtime_cashout"))
         
-        # Faqat admin uchun signal ko'rinishi
         cheat = f" 🕵️‍♂️ `[PORTLASH: x{ag['crash']}]`" if uid == ADMIN_ID else ""
         
         try: bot.edit_message_text(f"✈️ *AVIATOR LIVE*{cheat}\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", chat_id, message_id, parse_mode="Markdown", reply_markup=kb)
@@ -375,4 +374,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-            
+        
