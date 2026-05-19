@@ -2,18 +2,24 @@ import os, sys, json, random, asyncio
 from flask import Flask
 from threading import Thread
 
+# Render uchun kerakli kutubxonalarni avtomat tekshirish va o'rnatish
 try:
+    import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask", "nest_asyncio"])
+    import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
+# Asinxron oqimlar xatosini tuzatish
+nest_asyncio.apply()
+
 TOKEN = "8303235336:AAHkjNihtbYY5QeSm9H2P2DBHyFgg6Fyd_s"
 ADMIN_ID = 8086545587  
-VIP_USERS = [8086545587] # Bu yerga cheksiz VIP do'stlaring ID raqamlarini qo'shishing mumkin
+VIP_USERS = [8086545587] # Bu yerga VIP do'stlaring ID raqamlarini qo'shishing mumkin
 
 DATA_FILE = "mega_games_bot_db.json"
 DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05], "promos": {}}}
@@ -243,7 +249,13 @@ def home(): return "OK"
 
 def main():
     load_db()
+    # Flask serverini orqa fonda xavfsiz ishga tushirish
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    
+    # Telegram botni asosiy oqimda va to'g'ri event loop bilan ishga tushirish
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     bot = Application.builder().token(TOKEN).build()
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
@@ -252,8 +264,9 @@ def main():
     bot.add_handler(CommandHandler("promo", user_claim_promo))
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-    
+                            
