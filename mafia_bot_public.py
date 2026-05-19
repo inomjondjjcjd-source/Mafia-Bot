@@ -2,14 +2,14 @@ import os, sys, json, random, asyncio
 from flask import Flask
 from threading import Thread
 
-# Kutubxonalarni Render serveriga moslab o'rnatish
+# Python 3.14 va Render muhitida kutubxonalarni xatosiz o'rnatish
 try:
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==20.3", "flask==3.0.2", "nest_asyncio==1.6.0"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -58,7 +58,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ud["state"] = None
     save_db()
     
-    # Skrinshotdagi tekst formatini 100% tiklash
     txt = (
         f"👑 *SHOX SUPREME PLATFORMA v6.5*\n\n"
         f"💵 *Balans:* {ud['balance']} so'm\n"
@@ -66,7 +65,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚠️ _Maksimal garov qiymati: 10 000 so'm qilib belgilandi!_"
     )
     
-    # Skrinshotdagi tugmalar tartibini to'liq tiklash
     kb = [
         [InlineKeyboardButton("🍏 Apple of Fortune", callback_data="prep_apple"), InlineKeyboardButton("🚀 Aviator (Real-Time)", callback_data="prep_aviator")],
         [InlineKeyboardButton("💸 Pul Kiritish (Deposit)", url=f"tg://user?id={ADMIN_ID}"), InlineKeyboardButton("💳 Pul Yechish (Cashout)", url=f"tg://user?id={ADMIN_ID}")],
@@ -156,7 +154,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif q.data == "admin_dashboard" and uid == ADMIN_ID:
         await q.edit_message_text(f"👑 *ADMIN PANEL*\n\n/setav KOEFF\n/plus ID SUMMA\n/addpromo SUMMA", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
 
-# --- GAME LOGIC ---
+# --- O'YIN MANTIQLARI ---
 async def start_apple_game(message_obj, ud, bet, uid):
     ud["balance"] -= bet
     grid = []
@@ -288,10 +286,10 @@ def home(): return "Mafioz Bot Live!"
 
 def main():
     load_db()
-    # Port ziddiyatlarini chetlab o'tish
+    # Port sozlamasi Render serveri uchun avtomatlashtirildi
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     
-    # Eng barqaror ulanish tizimi
+    # Python 3.14 talab qiladigan eng toza builder tizimi
     bot = Application.builder().token(TOKEN).build()
     
     bot.add_handler(CommandHandler("start", start))
