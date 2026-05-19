@@ -5,7 +5,7 @@ from telebot import types
 
 TOKEN = "8691200742:AAEv-8-wixOxzlHmIU-jbMy4QHYOE1-M6QM"
 ADMIN_ID = 8086545587
-KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/shox_sup_v9_private_db"
+KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/shox_sup_v10_db"
 
 bot = telebot.TeleBot(TOKEN)
 DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [1.45, 2.10, 1.15, 3.50]}}
@@ -14,7 +14,8 @@ APPLE_COEFFS = [1.23, 1.54, 1.93, 2.41, 3.02, 4.02, 5.70, 8.55, 13.43, 20.15, 30
 def load_db():
     global DB
     try:
-        with urllib.request.urlopen(urllib.request.Request(KVDB_URL, method="GET"), timeout=10) as r:
+        req = urllib.request.Request(KVDB_URL, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode("utf-8"))
             if "users" in data: DB["users"] = {int(k): v for k, v in data["users"].items()}
             if "settings" in data: DB["settings"] = data["settings"]
@@ -23,7 +24,8 @@ def load_db():
 def save_db():
     try:
         payload = json.dumps({"users": {str(k): v for k, v in DB["users"].items()}, "settings": DB["settings"]}).encode("utf-8")
-        with urllib.request.urlopen(urllib.request.Request(KVDB_URL, data=payload, method="PUT", headers={"Content-Type": "application/json"}), timeout=10): pass
+        req = urllib.request.Request(KVDB_URL, data=payload, method="PUT", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10): pass
     except: pass
 
 def check_user(uid, name="Foydalanuvchi"):
@@ -103,11 +105,11 @@ def callback_handler(call):
             types.InlineKeyboardButton("🔄 Global Reset (Hamma pullarni 10k qilish)", callback_data="adm_reset"),
             types.InlineKeyboardButton("⬅ Bosh Menyu", callback_data="to_main")
         )
-        bot.edit_message_text(f"👑 *ADMIN PANEL*\n\n👥 Foydalanuvchilar: {len(DB['users'])} ta\n💰 Jami: {sum([u.get('balance',0) for u in DB['users'].values()])} so'm", cid, mid, reply_markup=kb)
+        bot.edit_message_text(f"👑 *ADMIN PANEL*\n\n👥 Foydalanuvchilar: {len(DB['users'])} ta", cid, mid, reply_markup=kb)
 
     elif call.data == "adm_set_kf" and uid == ADMIN_ID:
         ud["state"] = "set_kf"; save_db()
-        bot.edit_message_text("🚀 Keyingi samolyot necha koeffitsiyentda uchib ketishini yozing (Masalan: 5.5):", cid, mid)
+        bot.edit_message_text("🚀 Keyingi samolyot necha koeffitsiyentda uchib ketishini yozing (Misol: 5.5):", cid, mid)
 
     elif call.data == "adm_add_money" and uid == ADMIN_ID:
         ud["state"] = "add_money"; save_db()
@@ -204,23 +206,16 @@ def callback_handler(call):
         ud["balance"] += ud["apple_game"]["payout"]; ud["apple_game"] = None; save_db()
         bot.edit_message_text("💰 Olma o'yinidan pul yechib olindi!", cid, mid, reply_markup=get_main_keyboard(uid))
 
-    # --- AVIATOR (RANDOM CHEAT VA TARIX BILAN) ---
+    # --- AVIATOR ---
     elif call.data == "prep_aviator":
-        # Agar admin majburlab kf qo'ymagan bo'lsa, o'yin boshlanishidan oldin aniq random kf ni yaratib olamiz!
         if not DB["settings"].get("next_aviator"):
             DB["settings"]["next_aviator"] = round(random.uniform(1.10, 4.50), 2)
             save_db()
             
         kf_tarix = " | ".join([f"x{h}" for h in DB["settings"].get("aviator_history", [1.2, 2.5])[-5:]])
-        
-        # Maxfiy yozuv: Faqat senga ko'rinadi!
         cheat_msg = f"🔮 *CHEAT (Faqat sizga): Keyingi kf -> x{DB['settings']['next_aviator']}*\n\n" if uid == ADMIN_ID else ""
         
-        txt = (
-            f"📊 *Tarix:* [{kf_tarix}]\n\n"
-            f"{cheat_msg}"
-            f"🚀 *AVIATOR CRASH*\n\nTikish summasini tanlang:"
-        )
+        txt = f"📊 *Tarix:* [{kf_tarix}]\n\n{cheat_msg}🚀 *AVIATOR CRASH*\n\nTikish summasini tanlang:"
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(*[types.InlineKeyboardButton(f"🚀 {b} so'm", callback_data=f"av_bet_{b}") for b in [2000, 3000, 5000, 10000]])
         kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
@@ -241,9 +236,8 @@ def callback_handler(call):
         ud["balance"] -= bet
         
         crash = DB["settings"].get("next_aviator", 2.0)
-        DB["settings"]["next_aviator"] = None # Ishlatilgan zahoti o'chadi
+        DB["settings"]["next_aviator"] = None
         
-        # Tarixni yangilash
         if "aviator_history" not in DB["settings"]: DB["settings"]["aviator_history"] = []
         DB["settings"]["aviator_history"].append(crash)
         if len(DB["settings"]["aviator_history"]) > 7: DB["settings"]["aviator_history"].pop(0)
@@ -333,6 +327,8 @@ def keep_alive():
 
 if __name__ == '__main__':
     load_db()
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    port = int(os.environ.get("PORT", 10000))
+    Thread(target=lambda: app.run(host="0.0.0.0", port=port), daemon=True).start()
     Thread(target=keep_alive, daemon=True).start()
     bot.infinity_polling(skip_pending=True)
+        
