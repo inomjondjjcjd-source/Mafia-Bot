@@ -1,7 +1,7 @@
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8572085718:AAFwDsPudthtpJ3RdkyXt4qvVmJPAYOAy4Y"
+TOKEN = "8558624417:AAF2U4kshCCZG6PgUEsswyIs_AHq6IGySSE"
 
 menu = ReplyKeyboardMarkup(
     [
