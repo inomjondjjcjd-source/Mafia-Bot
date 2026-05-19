@@ -202,7 +202,7 @@ def callback_handler(call):
     elif call.data.startswith("av_mode_"):
         mode = call.data.split("_")[2]; bet = ud.get("temp_bet")
         if not bet or bet > ud["balance"]: return
-        ud["balance"] -= bet; crash = DB["settings'].get("next_aviator", 2.0); DB["settings"]["next_aviator"] = None
+        ud["balance"] -= bet; crash = DB["settings"].get("next_aviator", 2.0); DB["settings"]["next_aviator"] = None
         if "aviator_history" not in DB["settings"]: DB["settings"]["aviator_history"] = []
         DB["settings"]["aviator_history"].append(crash)
         if len(DB["settings"]["aviator_history"]) > 5: DB["settings"]["aviator_history"].pop(0)
@@ -267,4 +267,4 @@ if __name__ == '__main__':
     load_db(); port = int(os.environ.get("PORT", 10000))
     Thread(target=lambda: app.run(host="0.0.0.0", port=port), daemon=True).start()
     bot.infinity_polling(skip_pending=True)
-    
+        
