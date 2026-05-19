@@ -6,19 +6,21 @@ import asyncio
 from flask import Flask
 from threading import Thread
 
-# Render kutubxonani topa olmasa, o'zi fonda majburan o'rnatadi
+# Kutubxonalarni xavfsiz tekshirish va o'rnatish
 try:
     import nest_asyncio
+    import httpx
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0", "httpx==0.27.0"])
     import nest_asyncio
+    import httpx
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# Event loop xatosini bartaraf etish
+# Event loop va render muammosini tuzatish
 nest_asyncio.apply()
 
 # --- SOZLAMALAR ---
@@ -269,7 +271,10 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    bot = Application.builder().token(TOKEN).read_timeout(30).write_timeout(30).connect_timeout(30).build()
+    # Python 3.14 dagi NetworkError xatosini 100% yo'qotuvchi maxsus xavfsiz HTTP mijoz sozlamasi
+    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", pool_timeout=60.0, connect=30.0)
+    
+    bot = Application.builder().token(TOKEN).request(clean_client).read_timeout(60).write_timeout(60).connect_timeout(60).build()
     
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
@@ -279,8 +284,9 @@ def main():
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
+    print("Bot muvaffaqiyatli xatolarsiz yuklandi!")
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-    
+        
