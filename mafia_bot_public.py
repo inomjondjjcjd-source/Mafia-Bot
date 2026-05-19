@@ -3,6 +3,7 @@ import sys
 import json
 import random
 import time
+import urllib.request  # Uyg'otib turish (Ping) uchun kerak
 from flask import Flask
 from threading import Thread
 
@@ -20,6 +21,8 @@ except ImportError:
 TOKEN = "8691200742:AAHWVQwjNLXHTuYBU3sI9TdroKMcZZ0C0aA"
 ADMIN_ID = 8086545587
 DATA_FILE = "mega_games_bot_db.json"
+# RENDER_URL — Botingiz uxlab qolmasligi uchun o'zining Render havolasi
+RENDER_URL = "https://mafia-bot-1-cfws.onrender.com" 
 
 bot = telebot.TeleBot(TOKEN)
 DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05]}}
@@ -121,7 +124,7 @@ def callback_handler(call):
         try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
         except: pass
 
-    # --- ADMIN TIZIMI ---
+    # --- ADMIN PANEL ---
     elif call.data == "admin_dashboard" and uid == ADMIN_ID:
         total_users = len(DB["users"])
         total_balance = sum([u.get("balance", 0) for u in DB["users"].values()])
@@ -148,7 +151,7 @@ def callback_handler(call):
         try: bot.edit_message_text("👤 Foydalanuvchi *ID raqamini* yozib yuboring:", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
         except: pass
 
-    # --- CHIPTA SOTIB OLISH ---
+    # --- SOTIB OLISH ---
     elif call.data in ["b_ticket_1", "b_ticket_10"]:
         cost, tix = (4000, 1) if call.data == "b_ticket_1" else (30000, 10)
         if ud["balance"] < cost:
@@ -249,7 +252,7 @@ def callback_handler(call):
         try: bot.edit_message_text(f"💰 *CASHOUT DONE!*\n📈 Koeffitsiyent: *x{ag['current_win']}*\n💰 Balansga qo'shildi: +{win} so'm!", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
-# --- O'YINLARNING ASOSIY FUNKSIYALARI ---
+# --- O'YINLAR LOGIKASI ---
 def start_apple_game(message_obj, ud, bet, uid, is_ticket=False):
     if not is_ticket: ud["balance"] -= bet
     grid = []
@@ -292,12 +295,11 @@ def start_aviator_game(message_obj, ud, bet, uid, is_ticket=False):
 
 def run_realtime_aviator(chat_id, message_id, uid):
     while True:
-        time.sleep(0.2) # HAR 0.2 SONIYADA YANGILANISH TEZLIGI
+        time.sleep(0.2)  # HAR 0.2 SONIYADA JONLI UCHISH REAL-TIME
         ud = DB["users"].get(uid)
         if not ud or not ud.get("aviator_game") or ud["aviator_game"]["status"] != "flying": break
         ag = ud["aviator_game"]
         
-        # Samolyot koeffitsiyentining real o'sish qadami
         step = random.uniform(0.04, 0.08) if ag["current_win"] < 3.0 else random.uniform(0.12, 0.25)
         ag["current_win"] = round(ag["current_win"] + step, 2)
         
@@ -321,6 +323,17 @@ def run_realtime_aviator(chat_id, message_id, uid):
         
         try: bot.edit_message_text(f"✈️ *AVIATOR LIVE*{cheat}\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", chat_id, message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
+
+# --- UYQUGA QARSHI DORI (ANTI-SLEEP PINGER) ---
+def keep_alive():
+    while True:
+        time.sleep(300)  # Har 5 daqiqada (300 soniya) ishlaydi
+        try:
+            # Render veb-sahifasiga so'rov yuborib turadi, bu serverni uyg'oq saqlaydi
+            urllib.request.urlopen(RENDER_URL)
+            print("🚀 Anti-Sleep: Server muvaffaqiyatli uyg'otildi!")
+        except Exception as e:
+            print(f"⚠️ Anti-Sleep xatosi: {e}")
 
 @bot.message_handler(func=lambda msg: True)
 def text_handler(msg):
@@ -365,11 +378,14 @@ def text_handler(msg):
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "OK"
+def home(): return "Mening botim faol!"
 
 def main():
     load_db()
+    # Flask serverini orqa fonda ishga tushirish
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    # Uyquga qarshi maxsus pingerni alohida oqimda yoqish
+    Thread(target=keep_alive, daemon=True).start()
     bot.infinity_polling(skip_pending=True)
 
 if __name__ == '__main__':
