@@ -1,14 +1,24 @@
 import os
+import sys
 import json
 import random
 import asyncio
 from flask import Flask
 from threading import Thread
-import nest_asyncio
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# Event loop xatosini tuzatish
+# Render kutubxonani topa olmasa, o'zi fonda majburan o'rnatadi
+try:
+    import nest_asyncio
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
+    import nest_asyncio
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+
+# Event loop xatosini bartaraf etish
 nest_asyncio.apply()
 
 # --- SOZLAMALAR ---
@@ -254,14 +264,11 @@ def home(): return "OK"
 
 def main():
     load_db()
-    # Flaskni orqa fonda xavfsiz ishga tushirish
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     
-    # Yangi Python 3.14 tarmoq xatolarini to'g'rilash uchun maxsus moslama
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Botni qurish va HTTP xatolarni chetlab o'tish sozlamalari
     bot = Application.builder().token(TOKEN).read_timeout(30).write_timeout(30).connect_timeout(30).build()
     
     bot.add_handler(CommandHandler("start", start))
