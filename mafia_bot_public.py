@@ -2,14 +2,14 @@ import os, sys, json, random, asyncio
 from flask import Flask
 from threading import Thread
 
-# Python 3.14 va Render muhitida kutubxonalarni xatosiz o'rnatish
+# Kutubxonalarni Python 3.14 va Render muhitida ziddiyatsiz yuklash
 try:
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==20.8", "flask==3.0.2", "nest_asyncio==1.6.0"])
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -21,7 +21,7 @@ TOKEN = "8303235336:AAHkjNihtbYY5QeSm9H2P2DBHyFgg6Fyd_s"
 ADMIN_ID = 8086545587
 DATA_FILE = "mega_games_bot_db.json"
 
-DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05], "promos": {}}}
+DB = {"users": {}, "settings": {"next_aviator": None, "aviator_history": [2.34, 1.55, 4.12, 1.22, 3.05]}}
 APPLE_COEFFS = [1.23, 1.54, 1.93, 2.41, 3.02, 4.02, 5.70, 8.55, 13.43, 20.15, 30.22, 45.33, 69.48]
 
 def load_db():
@@ -32,7 +32,6 @@ def load_db():
                 d = json.load(f)
                 DB["users"] = {int(k): v for k, v in d.get("users", {}).items()}
                 DB["settings"] = d.get("settings", {})
-                if "promos" not in DB["settings"]: DB["settings"]["promos"] = {}
                 if "aviator_history" not in DB["settings"]: DB["settings"]["aviator_history"] = [2.34, 1.55, 4.12, 1.22, 3.05]
         except: pass
 
@@ -51,7 +50,7 @@ def check_user(uid, name="Foydalanuvchi"):
         if k not in u: u[k] = None
     return u
 
-# --- BOT INTERFEYSI (v6.5 SIZ ISTAGAN KO'RINISH) ---
+# --- BOT INTERFEYSI (v6.5 O'ZGARMAGAN SUPREME DIZAYN) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     ud = check_user(uid, update.effective_user.first_name)
@@ -76,10 +75,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     else:
-        try:
-            await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        except:
-            pass
+        try: await update.callback_query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        except: pass
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -91,68 +88,45 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await start(update, context)
     elif q.data in ["b_ticket_1", "b_ticket_10"]:
         cost, tix = (4000, 1) if q.data == "b_ticket_1" else (30000, 10)
-        if ud["balance"] < cost:
-            await q.edit_message_text("❌ Pul yetarli emas!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]])); return
-        ud["balance"] -= cost
-        ud["tickets"] += tix
-        save_db()
-        await start(update, context)
-
+        if ud["balance"] < cost: return
+        ud["balance"] -= cost; ud["tickets"] += tix; save_db(); await start(update, context)
     elif q.data == "prep_apple":
-        ud["state"] = "input_apple_bet"
-        save_db()
+        ud["state"] = "input_apple_bet"; save_db()
         kb = [[InlineKeyboardButton("💵 2 000", callback_data="q_ap_2000"), InlineKeyboardButton("💵 5 000", callback_data="q_ap_5000"), InlineKeyboardButton("💵 10 000", callback_data="q_ap_10000")], [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]
         await q.edit_message_text(f"🍏 *APPLE OF FORTUNE*\n\nBalans: *{ud['balance']}* so'm\nSummani tanlang yoki yozing (Maks 10k):", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
     elif q.data.startswith("q_ap_"):
         await start_apple_game(q.message, ud, int(q.data.split("_")[2]), uid)
-
     elif q.data == "prep_aviator":
-        ud["state"] = "input_aviator_bet"
-        save_db()
+        ud["state"] = "input_aviator_bet"; save_db()
         h_str = " ".join([f"`[x{x}]`" for x in DB["settings"].get("aviator_history", [2.34, 1.55, 4.12, 1.22, 3.05])[-5:]])
         kb = [[InlineKeyboardButton("💵 2 000", callback_data="q_av_2000"), InlineKeyboardButton("💵 5 000", callback_data="q_av_5000"), InlineKeyboardButton("💵 10 000", callback_data="q_av_10000")], [InlineKeyboardButton("⬅️ Ortga", callback_data="to_main")]]
         await q.edit_message_text(f"✈️ *AVIATOR*\n\nTarix: {h_str}\nBalans: *{ud['balance']}* so'm\nSummani tanlang yoki yozing (Maks 10k):", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
     elif q.data.startswith("q_av_"):
         await start_aviator_game(q.message, ud, int(q.data.split("_")[2]), context, uid)
-
     elif q.data.startswith("ap_select_"):
         idx = int(q.data.split("_")[2])
         ag = ud.get("apple_game")
         if not ag: return
         if ag["grid"][ag["current_row"]][idx] == "bad":
-            ud["apple_game"] = None
-            save_db()
+            ud["apple_game"] = None; save_db()
             await q.edit_message_text("💀 *Chirigan olma! Pulingiz kuydi.*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🍏 Qayta o'ynash", callback_data="prep_apple")]]))
             return
         ag["payout"] = int(ag["bet"] * APPLE_COEFFS[ag["current_row"]])
-        ag["current_row"] += 1
-        save_db()
+        ag["current_row"] += 1; save_db()
         if ag["current_row"] == 13:
-            ud["balance"] += ag["payout"]
-            ud["apple_game"] = None
-            save_db()
+            ud["balance"] += ag["payout"]; ud["apple_game"] = None; save_db()
             await q.edit_message_text(f"👑 *JACKPOT x69.48!* \n💰 +{ag['payout']} so'm!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Menyu", callback_data="to_main")]])); return
         await show_apple(q, ud, (uid == ADMIN_ID))
-        
-    elif q.data == "ap_cashout" and ud.get("apple_game") and ud["apple_game"]["current_row"] > 0:
-        ud["balance"] += ud["apple_game"]["payout"]
-        ud["apple_game"] = None
-        save_db()
-        await start(update, context)
-
+    elif q.data == "ap_cashout" and ud.get("apple_game"):
+        ud["balance"] += ud["apple_game"]["payout"]; ud["apple_game"] = None; save_db(); await start(update, context)
     elif q.data == "av_realtime_cashout":
         ag = ud.get("aviator_game")
         if not ag or ag["status"] != "flying": return
         win = int(ag["bet"] * ag["current_win"])
-        ud["balance"] += win
-        ud["aviator_game"] = None
-        save_db()
+        ud["balance"] += win; ud["aviator_game"] = None; save_db()
         await q.edit_message_text(f"💰 *CASHOUT DONE!*\n📈 Koeffitsiyent: *x{ag['current_win']}*\n💰 +{win} so'm!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta uchish", callback_data="prep_aviator")]]))
-
     elif q.data == "admin_dashboard" and uid == ADMIN_ID:
-        await q.edit_message_text(f"👑 *ADMIN PANEL*\n\n/setav KOEFF\n/plus ID SUMMA\n/addpromo SUMMA", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
+        await q.edit_message_text(f"👑 *ADMIN PANEL*\n\n/setav KOEFF\n/plus ID SUMMA", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main")]]))
 
 # --- O'YIN MANTIQLARI ---
 async def start_apple_game(message_obj, ud, bet, uid):
@@ -164,8 +138,7 @@ async def start_apple_game(message_obj, ud, bet, uid):
         for bi in random.sample(range(5), bad): items[bi] = "bad"
         grid.append(items)
     ud["apple_game"] = {"grid": grid, "current_row": 0, "bet": bet, "payout": bet}
-    ud["state"] = None
-    save_db()
+    ud["state"] = None; save_db()
     
     class FakeQuery:
         def __init__(self, msg): self.message = msg
@@ -176,11 +149,10 @@ async def start_apple_game(message_obj, ud, bet, uid):
 
 async def start_aviator_game(message_obj, ud, bet, context, uid):
     ud["balance"] -= bet
-    crash = DB["settings"]["next_aviator"] if DB["settings"].get("next_aviator") else round(random.uniform(1.1, 4.5), 2)
+    crash = DB["settings"].get("next_aviator") if DB["settings"].get("next_aviator") else round(random.uniform(1.1, 4.5), 2)
     DB["settings"]["next_aviator"] = None
     ud["aviator_game"] = {"current_win": 1.0, "crash": crash, "bet": bet, "status": "flying"}
-    ud["state"] = None
-    save_db()
+    ud["state"] = None; save_db()
     asyncio.create_task(run_realtime_aviator(context.application, message_obj.chat_id, message_obj.message_id, uid))
 
 async def run_realtime_aviator(app_obj, chat_id, message_id, uid):
@@ -189,21 +161,17 @@ async def run_realtime_aviator(app_obj, chat_id, message_id, uid):
         ud = DB["users"].get(uid)
         if not ud or not ud.get("aviator_game") or ud["aviator_game"]["status"] != "flying": break
         ag = ud["aviator_game"]
-        ag["current_win"] = round(ag["current_win"] + random.uniform(0.12, 0.28), 2)
+        ag["current_win"] = round(ag["current_win"] + random.uniform(0.15, 0.30), 2)
         
         if ag["current_win"] >= ag["crash"]:
-            cp = ag["crash"]
-            ud["aviator_game"] = None
-            DB["settings"]["aviator_history"].append(cp)
-            save_db()
-            try:
-                await app_obj.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"💥 *BOOM! x{cp} da portladi!*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta", callback_data="prep_aviator")]]))
+            cp = ag["crash"]; ud["aviator_game"] = None
+            DB["settings"]["aviator_history"].append(cp); save_db()
+            try: await app_obj.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"💥 *BOOM! x{cp} da portladi!*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✈️ Qayta", callback_data="prep_aviator")]]))
             except: pass
             break
         save_db()
         current_payout = int(ag["bet"] * ag["current_win"])
-        try:
-            await app_obj.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"✈️ *AVIATOR*\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"🛑 CASHOUT ({current_payout})", callback_data="av_realtime_cashout")]]))
+        try: await app_obj.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"✈️ *AVIATOR*\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"🛑 CASHOUT ({current_payout})", callback_data="av_realtime_cashout")]]))
         except: pass
 
 async def show_apple(q, ud, is_admin_cheat):
@@ -223,84 +191,47 @@ async def show_apple(q, ud, is_admin_cheat):
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    ud = check_user(uid, update.effective_user.first_name)
+    ud = check_user(uid)
     if not ud["state"]: return
     try:
         bet = int(update.message.text.strip())
-        if bet < 1000 or bet > 10000:
-            await update.message.reply_text("❌ Garov 1000 dan 10 000 so'mgacha bo'lishi shart!"); return
+        if bet < 1000 or bet > 10000 or ud["balance"] < bet: return
     except: return
-    if ud["balance"] < bet:
-        await update.message.reply_text("❌ Hisobda mablag' yetarli emas!"); return
     
     msg = await update.message.reply_text("🔄 Boshlanmoqda...")
     if ud["state"] == "input_apple_bet": await start_apple_game(msg, ud, bet, uid)
     elif ud["state"] == "input_aviator_bet": await start_aviator_game(msg, ud, bet, context, uid)
 
-# --- ADMIN COMMANDS ---
+# --- ADMIN BUYRUKLARI ---
 async def admin_setaviator(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID:
-        try: DB["settings"]["next_aviator"] = float(context.args[0]); save_db(); await update.message.reply_text("✅ Aviator koeffitsiyenti qotirildi!")
+        try: DB["settings"]["next_aviator"] = float(context.args[0]); save_db(); await update.message.reply_text("✅ Keyingi uchish koeffitsiyenti qotirildi!")
         except: pass
 
 async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == ADMIN_ID:
         try:
             t_id, val = int(context.args[0]), int(context.args[1])
-            user = check_user(t_id)
-            user["balance"] += val
-            save_db()
-            await update.message.reply_text(f"✅ ID {t_id} ga {val} so'm qo'shildi!")
-            try: await context.application.bot.send_message(chat_id=t_id, text=f"💰 Hisobingizga {val} so'm qo'shildi!")
-            except: pass
+            user = check_user(t_id); user["balance"] += val; save_db(); await update.message.reply_text("✅ Balans muvaffaqiyatli qo'shildi!")
         except: pass
 
-async def admin_addpromo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id == ADMIN_ID:
-        try:
-            amount = int(context.args[0])
-            code = f"PROMO-{random.randint(1000, 9999)}"
-            DB["settings"]["promos"][code] = amount
-            save_db()
-            await update.message.reply_text(f"🎟 Yangi promokod: `{code}`", parse_mode="Markdown")
-        except: pass
-
-async def user_claim_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    ud = check_user(uid, update.effective_user.first_name)
-    try:
-        code = context.args[0].strip()
-        if code in DB["settings"]["promos"]:
-            bonus = DB["settings"]["promos"].pop(code)
-            ud["balance"] += bonus
-            save_db()
-            await update.message.reply_text(f"✅ `+{bonus}` so'm hisobingizga o'tkazildi!", parse_mode="Markdown")
-        else:
-            await update.message.reply_text("❌ Bunday promokod mavjud emas yoki ishlatilgan!")
-    except: pass
-
-# --- FLASK (RENDER WEBSERVICE UCHUN) ---
+# --- FLASK WEB SERVER ---
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Mafioz Bot Live!"
+def home(): return "OK"
 
 def main():
     load_db()
-    # Port sozlamasi Render serveri uchun avtomatlashtirildi
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     
-    # Python 3.14 talab qiladigan eng toza builder tizimi
     bot = Application.builder().token(TOKEN).build()
     
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
     bot.add_handler(CommandHandler("plus", admin_plus))
-    bot.add_handler(CommandHandler("addpromo", admin_addpromo))
-    bot.add_handler(CommandHandler("promo", user_claim_promo))
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    print("Bot muvaffaqiyatli ishga tushirildi!")
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
