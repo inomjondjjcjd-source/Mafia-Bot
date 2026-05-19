@@ -271,10 +271,11 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Pool_timeout o'rniga faqat standart xavfsiz timeout sozlamasi qoldirildi
-    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=45.0)
+    # Eng xavfsiz va to'g'ri bog'lanish sozlamasi:
+    # Ortiqcha builder parametrlari olib tashlandi, timeoutlar httpx ichida boshqariladi
+    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=60.0)
     
-    bot = Application.builder().token(TOKEN).request(clean_client).read_timeout(45).write_timeout(45).connect_timeout(45).build()
+    bot = Application.builder().token(TOKEN).request(clean_client).build()
     
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
@@ -284,9 +285,9 @@ def main():
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    print("Bot xatolarsiz muvaffaqiyatli yuklandi!")
+    print("Bot sozlamalari muvaffaqiyatli saqlandi!")
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-                   
+        
