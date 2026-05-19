@@ -9,8 +9,8 @@ from threading import Thread
 import telebot
 from telebot import types
 
-# --- ASOSIY SOZLAMALAR ---
-TOKEN = "8691200742:AAEz0bAHTK3tSfvS1EwAbvg3T4wGmBt5kks" 
+# --- ASOSIY SOZLAMALAR (YANGI TOKEN JOYLANDI) ---
+TOKEN = "8691200742:AAEv-8-wixOxzlHmIU-jbMy4QHYOE1-M6QM" 
 ADMIN_ID = 8086545587
 RENDER_URL = "https://mafia-bot-1-cfws.onrender.com"
 
@@ -110,7 +110,7 @@ def start_cmd(message):
         f"👑 *SHOX SUPREME PLATFORMA v9.0*\n\n"
         f"💵 *Balans:* {ud['balance']} so'm\n"
         f"🎫 *Chiptalar:* {ud['tickets']} ta\n\n"
-        f"⚡️ *Bot muvaffaqiyatli yangilandi va tezlashtirildi!*"
+        f"⚡ *Bot yangi token bilan muvaffaqiyatli ishga tushirildi!*"
     )
     bot.send_message(message.chat.id, txt, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
 
@@ -151,7 +151,7 @@ def callback_handler(call):
         ud["state"] = None
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(*[types.InlineKeyboardButton(f"{b} so'm", callback_data=f"m_bet_{b}") for b in [2000, 3000, 5000, 8000, 10000]])
-        kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+        kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
         try: bot.edit_message_text("💣 *MINES O'YINI*\n\nTikish summasini tanlang:", call.message.chat.id, call.message.message_id, reply_markup=kb)
         except: pass
 
@@ -164,7 +164,7 @@ def callback_handler(call):
         save_db()
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(*[types.InlineKeyboardButton(f"💣 {b}", callback_data=f"m_bomb_{b}") for b in [1, 2, 3, 4, 7, 10, 15, 20, 24]])
-        kb.add(types.InlineKeyboardButton("⬅️ Orqaga", callback_data="prep_mines"))
+        kb.add(types.InlineKeyboardButton("⬅ Orqaga", callback_data="prep_mines"))
         try: bot.edit_message_text(f"💣 Tikilgan: *{bet} so'm*\n\nMinalar sonini tanlang:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
@@ -209,7 +209,7 @@ def callback_handler(call):
         ud["state"] = None
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(*[types.InlineKeyboardButton(f"🍏 {b} so'm", callback_data=f"ap_bet_{b}") for b in [2000, 3000, 5000, 8000, 10000]])
-        kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+        kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
         try: bot.edit_message_text("🍏 *APPLE OF FORTUNE*\n\nTikish summasini tanlang:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
@@ -259,7 +259,7 @@ def callback_handler(call):
         ud["state"] = None
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(*[types.InlineKeyboardButton(f"🚀 {b} so'm", callback_data=f"av_bet_{b}") for b in [2000, 3000, 5000, 8000, 10000]])
-        kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+        kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
         try: bot.edit_message_text("🚀 *AVIATOR CRASH*\n\nTikish summasini tanlang:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
@@ -306,7 +306,7 @@ def callback_handler(call):
         total_users = len(DB["users"])
         total_balance = sum([u.get("balance", 0) for u in DB["users"].values()])
         txt = f"👑 *ADMIN PANEL*\n\n👥 Foydalanuvchilar: {total_users} ta\n💰 Jami balans: {total_balance} so'm"
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="to_main"))
+        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("⬅ Bosh Menyu", callback_data="to_main"))
         try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=kb)
         except: pass
 
@@ -336,7 +336,7 @@ def show_mines_board(message_obj, ud, uid, lost=False, won=False):
         if len(mg["opened"]) > 0: kb.add(types.InlineKeyboardButton(f"💰 Naqdlashtirish ({mg['payout']} so'm)", callback_data="mines_cashout"))
         kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
     else:
-        kb.add(types.InlineKeyboardButton("🔄 Yangi O'yin", callback_data="prep_mines"), types.InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="to_main"))
+        kb.add(types.InlineKeyboardButton("🔄 Yangi O'yin", callback_data="prep_mines"), types.InlineKeyboardButton("⬅ Bosh Menyu", callback_data="to_main"))
     if lost: txt = f"💥 *MAG'LUBIYAT!*\n💣 Bombaga duch keldingiz.\n💸 -{mg['bet']} so'm."
     elif won: txt = f"👑 *G'ALABA!*\n📈 Koeffitsiyent: *x{mg['current_kf']}*\n💰 Sof yutuq: +{mg['payout']} so'm!"
     else: txt = f"💣 *MINES (30 katak)*\n\n💵 Tikilgan: *{mg['bet']}* so'm | Minalar: *{mg['mines_count']}*\n📈 Koeffitsiyent: *x{mg['current_kf']}*\n💰 Naqd Yutuq: *{mg['payout']}* so'm"
@@ -355,7 +355,7 @@ def show_apple(message_obj, ud):
             else: row_btns.append(types.InlineKeyboardButton("🔒", callback_data="lock"))
         kb.row(*row_btns)
     if crow > 0: kb.add(types.InlineKeyboardButton(f"💰 Naqdlashtirish ({ag['payout']})", callback_data="ap_cashout"))
-    kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+    kb.add(types.InlineKeyboardButton("⬅ Chiqish", callback_data="to_main"))
     try: bot.edit_message_text(f"🍏 *APPLE OF FORTUNE*\nMavjud yutuq: *{ag['payout']}* so'm", message_obj.chat.id, message_obj.message_id, parse_mode="Markdown", reply_markup=kb)
     except: pass
 
@@ -405,4 +405,4 @@ def keep_alive():
 
 if __name__ == '__main__':
     load_db()
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start(
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
