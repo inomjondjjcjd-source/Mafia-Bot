@@ -1,226 +1,43 @@
-import os
-import sys
-import subprocess
-import json
+from telegram import ReplyKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# 📦 KERAKLI KUTUBXONALARNI AVTO-O'RNATISH
-try:
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1"])
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-    from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+TOKEN = "8572085718:AAFwDsPudthtpJ3RdkyXt4qvVmJPAYOAy4Y"
 
-# 🔑 ASOSIY SOZLAMALAR
-TOKEN = "8829005476:AAGc-b-dQ1NJycS3vMf0-tRn7H15y4kFtn4"
-ADMIN_ID = 1000065923  # 👑 Sizning shaxsiy Telegram ID'ngiz (Siz bu yerda Shoxsiz!)
-DATA_FILE = "reaction_bot_db.json"
+menu = ReplyKeyboardMarkup(
+    [
+        ["🎮 Game 1", "🎯 Game 2"],
+        ["💣 Mines", "👤 Profile"]
+    ],
+    resize_keyboard=True
+)
 
-# 📊 MA'LUMOTLAR BAZASI INTERFEYSI
-DB = {
-    "users": {},       # Foydalanuvchi balanslari va kanallari
-    "promocodes": {},  # Yaratilgan promokodlar
-    "settings": {
-        "service_price": 500  # 💰 Bitta kanal qo'shish narxi: 500 so'm
-    }
-}
-
-def load_db():
-    global DB
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                loaded["users"] = {int(k): v for k, v in loaded.get("users", {}).items()}
-                DB = loaded
-        except: pass
-
-def save_db():
-    try:
-        to_save = DB.copy()
-        to_save["users"] = {str(k): v for k, v in DB["users"].items()}
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(to_save, f, indent=4, ensure_ascii=False)
-    except: pass
-
-def check_user(user_id, name="Foydalanuvchi"):
-    if user_id not in DB["users"]:
-        DB["users"][user_id] = {
-            "name": name,
-            "balance": 100,  # Skrinshotingizdagidek yangi kirgandagi bonus: 100 so'm
-            "channels": [],
-            "limit": 0,
-            "tarif": "Bepul"
-        }
-        save_db()
-    return DB["users"][user_id]
-
-# 👋 START BUYRUG'I (ASOSIY STRUKTURA)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    name = update.effective_user.first_name
-    check_user(user_id, name)
-    
-    txt = (
-        f"📣 *@ReaksiyauzBot — Kanal va Guruhlarga Reaksiya qo'shish boti!*\n\n"
-        f"✨ Endi siz ham o'z kanal yoki guruhingizdagi postlarga qulay va chiroyli Reaksiyalar qo'shishingiz mumkin.\n"
-        f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
+    await update.message.reply_text(
+        "🎮 O'yin botiga xush kelibsiz!",
+        reply_markup=menu
     )
-    
-    # Skrinshotingizdagi pastki tugmalar strukturasi
-    buttons = [
-        [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
-        [InlineKeyboardButton("💰 Hisobni ko'rish", callback_data="view_balance"), InlineKeyboardButton("🛍 Yangi xizmatlar", callback_data="new_services")],
-        [InlineKeyboardButton("📖 Bot qo'llanmasi", callback_data="bot_guide"), InlineKeyboardButton("⭐ Sovg'alar olish", callback_data="get_gifts")]
-    ]
-    if user_id == ADMIN_ID:
-        buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_panel")])
-        
-    await update.message.reply_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-# 🎛 TUGMALAR BOSILGANDAGI KODLAR
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    ud = check_user(user_id)
-    
-    # 1. REAKSIYALAR SOZLAMALARI MENYUSI
-    if query.data == "reaction_settings":
-        txt = (
-            f"📣 *Reaksiyalarni ishlatish uchun avval botni kanal yoki guruhga qo'shishingiz kerak.*\n\n"
-            f"👉 Quyidagi tugmalardan foydalanib, kerakli reaksiyalarni tanlang yoki ko'rish uchun bosing."
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "🎮 Game 1":
+        await update.message.reply_text("🚀 Game 1 ochildi")
+
+    elif text == "🎯 Game 2":
+        await update.message.reply_text("🔥 Game 2 ochildi")
+
+    elif text == "💣 Mines":
+        await update.message.reply_text("💣 Mines game")
+
+    elif text == "👤 Profile":
+        await update.message.reply_text(
+            f"👤 Ism: {update.effective_user.first_name}"
         )
-        kb = [
-            [InlineKeyboardButton("➕ Kanal qo'shish", callback_data="add_channel"), InlineKeyboardButton("🗑 Kanal o'chirish", callback_data="del_channel")],
-            [InlineKeyboardButton("📄 Kanallar ro'yxati", callback_data="list_channels")],
-            [InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")]
-        ]
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        
-    # 2. HISOBNI KO'RISH MENYUSI
-    elif query.data == "view_balance":
-        txt = (
-            f"💳 *Hisobingiz haqida:*\n\n"
-            f"🆔 *ID:* `{user_id}`\n"
-            f"💰 *Balans:* {ud['balance']} so'm\n"
-            f"⏰ *Limit:* {ud['limit']}\n"
-            f"💎 *Tarif:* {ud['tarif']}\n\n"
-            f"⭐️ *Premium obunga qo'shiling!*"
-        )
-        kb = [
-            [InlineKeyboardButton("💰 Hisob to'ldirish", callback_data="refill_balance")],
-            [InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")]
-        ]
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        
-    # 3. BOSH MENYUGA QAYTISH
-    elif query.data == "back_main":
-        txt = (
-            f"📣 *@ReaksiyauzBot — Kanal va Guruhlarga Reaksiya qo'shish boti!*\n\n"
-            f"✨ Endi siz ham o'z kanal yoki guruhingizdagi postlarga qulay va chiroyli Reaksiyalar qo'shishingiz mumkin.\n"
-            f"👍❤️🔥😮😂 — xohlagancha emojilarni tanlang va obunachilaringizni yanada faol qiling!"
-        )
-        buttons = [
-            [InlineKeyboardButton("🎁 Reaksiyalar sozlamalar", callback_data="reaction_settings")],
-            [InlineKeyboardButton("💰 Hisobni ko'rish", callback_data="view_balance"), InlineKeyboardButton("🛍 Yangi xizmatlar", callback_data="new_services")],
-            [InlineKeyboardButton("📖 Bot qo'llanmasi", callback_data="bot_guide"), InlineKeyboardButton("⭐ Sovg'alar olish", callback_data="get_gifts")]
-        ]
-        if user_id == ADMIN_ID:
-            buttons.append([InlineKeyboardButton("👑 SHOX (Admin) Paneli", callback_data="admin_panel")])
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # 4. KANALLAR RO'YXATI
-    elif query.data == "list_channels":
-        ch_list = ud["channels"]
-        if not ch_list:
-            txt = "❌ Siz hali birorta ham kanal ulamagansiz uka."
-        else:
-            txt = "📋 *Sizning ulangan kanallaringiz:*\n\n" + "\n".join([f"🔹 {ch}" for ch in ch_list])
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="reaction_settings")]]
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+app = ApplicationBuilder().token(TOKEN).build()
 
-    # 👑 SHOX (ADMIN) PANEL INTERFEYSI
-    elif query.data == "admin_panel" and user_id == ADMIN_ID:
-        txt = (
-            f"👑 *REAKSIYA BOT - SHOX PANELI*\n\n"
-            f"👥 Jami a'zolar: *{len(DB['users'])} ta*\n"
-            f"💰 Xizmat narxi: *{DB['settings']['service_price']} so'm*\n\n"
-            f"Admin buyruqlari:\n"
-            f"🔹 `/plus ID PUL` - Istalgan odamga pul solish\n"
-            f"🔹 `/minus ID PUL` - Balansdan pul ayirish\n"
-            f"🔹 `/promo KOD SUMMA` - Yangi promokod yaratish\n"
-            f"🔹 `/setprice NARX` - Xizmat narxini o'zgartirish"
-        )
-        kb = [[InlineKeyboardButton("⬅️ Bosh menyu", callback_data="back_main")]]
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT, buttons))
 
-    # TEZ ORADA ISHLAYDIGAN TUGMALAR UCHUN SHABLON
-    elif query.data in ["add_channel", "del_channel", "new_services", "bot_guide", "get_gifts", "refill_balance"]:
-        txt = f"⚙️ Bu bo'lim loyihaning keyingi bosqichida to'liq ishga tushadi uka! Hozircha balans va struktura daxshat ishlamoqda."
-        kb = [[InlineKeyboardButton("⬅️ Ortga qaytish", callback_data="back_main")] ]
-        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
-
-# 👑 ADMIN BUYRUQLARI MEXANIZMI
-async def admin_plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
-        if target_id in DB["users"]:
-            DB["users"][target_id]["balance"] += amount
-            save_db()
-            await update.message.reply_text(f"✅ `ID: {target_id}` balansiga *{amount} so'm* qo'shildi!")
-        else:
-            await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
-    except: await update.message.reply_text("Format: `/plus ID PUL`")
-
-async def admin_minus(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        target_id = int(context.args[0])
-        amount = int(context.args[1])
-        if target_id in DB["users"]:
-            DB["users"][target_id]["balance"] -= amount
-            save_db()
-            await update.message.reply_text(f"✅ `ID: {target_id}` balansidan *{amount} so'm* ayrildi!")
-    except: await update.message.reply_text("Format: `/minus ID PUL`")
-
-async def admin_setprice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        price = int(context.args[0])
-        DB["settings"]["service_price"] = price
-        save_db()
-        await update.message.reply_text(f"✅ Yangi xizmat narxi saqlandi: *{price} so'm*")
-    except: await update.message.reply_text("Format: `/setprice NARX`")
-
-async def admin_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    try:
-        code = context.args[0].upper()
-        amount = int(context.args[1])
-        DB["promocodes"][code] = {"amount": amount, "used_by": []}
-        save_db()
-        await update.message.reply_text(f"🎁 Promokod yaratildi: `{code}` ({amount} so'm)")
-    except: await update.message.reply_text("Format: `/promo KOD SUMMA`")
-
-# 🚀 BOTNI RUN QILISH
-def main():
-    load_db()
-    bot_app = Application.builder().token(TOKEN).build()
-    
-    bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(CommandHandler("plus", admin_plus))
-    bot_app.add_handler(CommandHandler("minus", admin_minus))
-    bot_app.add_handler(CommandHandler("setprice", admin_setprice))
-    bot_app.add_handler(CommandHandler("promo", admin_promo))
-    bot_app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    print("Reaksiyalar Boti daxshatli tarzda ishga tushdi...")
-    bot_app.run_polling(drop_pending_updates=True)
-
-if __name__ == '__main__':
-    main()
-    1000065923
+print("Bot ishladi...")
+app.run_polling()
