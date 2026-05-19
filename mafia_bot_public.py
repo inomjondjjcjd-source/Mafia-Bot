@@ -10,7 +10,6 @@ import telebot
 from telebot import types
 
 # --- ASOSIY SOZLAMALAR ---
-# ⚠️ Sen bergan yangi token kod ichiga muvaffaqiyatli joylashtirildi!
 TOKEN = "8691200742:AAEz0bAHTK3tSfvS1EwAbvg3T4wGmBt5kks" 
 ADMIN_ID = 8086545587
 RENDER_URL = "https://mafia-bot-1-cfws.onrender.com"
@@ -113,7 +112,7 @@ def start_cmd(message):
         f"👑 *SHOX SUPREME PLATFORMA v8.0*\n\n"
         f"💵 *Balans:* {ud['balance']} so'm\n"
         f"🎫 *Chiptalar:* {ud['tickets']} ta\n\n"
-        f"💣 *Mines o'yini muvaffaqiyatli qo'shildi! Kataklar: 30 ta.*"
+        f"💣 *Mines o'yini yangilandi! Inline tugmalar qo'shildi.*"
     )
     bot.send_message(message.chat.id, txt, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
 
@@ -135,8 +134,47 @@ def callback_handler(call):
     elif call.data == "prep_mines":
         ud["state"] = "mines_expect_bet"
         save_db()
-        try: bot.edit_message_text("💣 *MINES O'YINI*\n\nTikish summasini kiriting (Masalan: 5000):", call.message.chat.id, call.message.message_id)
+        kb = types.InlineKeyboardMarkup(row_width=3)
+        kb.add(
+            types.InlineKeyboardButton("2000 so'm", callback_data="m_bet_2000"),
+            types.InlineKeyboardButton("3000 so'm", callback_data="m_bet_3000"),
+            types.InlineKeyboardButton("5000 so'm", callback_data="m_bet_5000")
+        )
+        kb.add(
+            types.InlineKeyboardButton("8000 so'm", callback_data="m_bet_8000"),
+            types.InlineKeyboardButton("10000 so'm", callback_data="m_bet_10000")
+        )
+        kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+        try: bot.edit_message_text("💣 *MINES O'YINI*\n\nTikish summasini tanlang yoki o'zingiz yozing:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
+
+    elif call.data.startswith("m_bet_"):
+        bet = int(call.data.split("_")[2])
+        if bet > ud["balance"]:
+            bot.answer_callback_query(call.id, "❌ Balansda yetarli mablag' yo'q!", show_alert=True)
+            return
+        ud["temp_bet"] = bet
+        ud["state"] = "mines_expect_bombs"
+        save_db()
+        
+        kb = types.InlineKeyboardMarkup(row_width=3)
+        kb.add(*[types.InlineKeyboardButton(f"💣 {b}", callback_data=f"m_bomb_{b}") for b in [1, 2, 3, 4, 7, 10, 15, 20, 24]])
+        kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
+        try: bot.edit_message_text(f"💣 Tikilgan summa: *{bet} so'm*\n\nO'yinda nechta bomba bo'lsin? Tanlang:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        except: pass
+
+    elif call.data.startswith("m_bomb_"):
+        bombs = int(call.data.split("_")[2])
+        bet = ud.get("temp_bet")
+        if not bet or bet > ud["balance"]: return
+        
+        ud["balance"] -= bet
+        mines_positions = random.sample(range(30), bombs)
+        ud["mines_game"] = {"bet": bet, "mines_count": bombs, "mines": mines_positions, "opened": [], "current_kf": 1.0, "payout": bet, "status": "playing"}
+        ud["state"] = None
+        ud["temp_bet"] = None
+        save_db()
+        show_mines_board(call.message, ud)
 
     elif call.data.startswith("mine_open_"):
         mg = ud.get("mines_game")
@@ -203,9 +241,11 @@ def callback_handler(call):
         except: pass
 
 def show_mines_board(message_obj, ud, lost=False, won=False):
+    uid = ud.get("uid") or message_obj.chat.id
     mg = ud["mines_game"]
     kb = types.InlineKeyboardMarkup(row_width=5)
     btns = []
+    
     for i in range(30):
         if lost:
             if i in mg["mines"]: btns.append(types.InlineKeyboardButton("💥", callback_data="lock"))
@@ -215,8 +255,19 @@ def show_mines_board(message_obj, ud, lost=False, won=False):
             if i in mg["mines"]: btns.append(types.InlineKeyboardButton("💣", callback_data="lock"))
             else: btns.append(types.InlineKeyboardButton("💎", callback_data="lock"))
         else:
-            if i in mg["opened"]: btns.append(types.InlineKeyboardButton("💎", callback_data="lock"))
-            else: btns.append(types.InlineKeyboardButton("❓", callback_data=f"mine_open_{i}"))
+            if i in mg["opened"]: 
+                btns.append(types.InlineKeyboardButton("💎", callback_data="lock"))
+            else:
+                # 👑 Sening so'roving bo'yicha: Faqat sen (Admin) uchun minalar yashirincha ko'rinib turadi, xuddi cheatdek!
+                if uid == ADMIN_ID:
+                    if i in mg["mines"]:
+                        btns.append(types.InlineKeyboardButton("🟢", callback_data=f"mine_open_{i}")) # Mina bor joy yashil olma/belgi bo'lib senga ko'rinadi (unga bosma!)
+                    else:
+                        btns.append(types.InlineKeyboardButton("❓", callback_data=f"mine_open_{i}")) # Toza joy oddiy ko'rinadi
+                else:
+                    # Oddiy o'yinchilar uchun hammasi yopiq va bir xil
+                    btns.append(types.InlineKeyboardButton("❓", callback_data=f"mine_open_{i}"))
+                    
     kb.add(*btns)
     
     if not lost and not won:
@@ -229,6 +280,7 @@ def show_mines_board(message_obj, ud, lost=False, won=False):
     if lost: txt = f"💥 *MAG'LUBIYAT!*\n💣 Bombaga duch keldingiz.\n💸 -{mg['bet']} so'm."
     elif won: txt = f"👑 *G'ALABA!*\n📈 Koeffitsiyent: *x{mg['current_kf']}*\n💰 Sof yutuq: +{mg['payout']} so'm!"
     else: txt = f"💣 *MINES (30 katak)*\n\n💵 Tikilgan: *{mg['bet']}* so'm | Minalar: *{mg['mines_count']}*\n📈 Koeffitsiyent: *x{mg['current_kf']}*\n💰 Naqd Yutuq: *{mg['payout']}* so'm"
+    
     try: bot.edit_message_text(txt, message_obj.chat.id, message_obj.message_id, parse_mode="Markdown", reply_markup=kb)
     except: pass
 
@@ -238,6 +290,7 @@ def text_handler(msg):
     ud = check_user(uid)
     if not ud["state"]: return
     
+    # Matn orqali ham tikish yozilsa, xato bermay ishlayveradi
     if ud["state"] == "mines_expect_bet":
         try:
             bet = int(msg.text.strip())
@@ -247,22 +300,10 @@ def text_handler(msg):
             ud["temp_bet"] = bet
             ud["state"] = "mines_expect_bombs"
             save_db()
-            bot.reply_to(msg, "💣 O'yinda nechta bomba bo'lsin? (1-24):")
-        except: ud["state"] = None; save_db()
-        return
-
-    if ud["state"] == "mines_expect_bombs":
-        try:
-            bombs = int(msg.text.strip())
-            if bombs < 1 or bombs > 24: return
-            bet = ud["temp_bet"]
-            ud["balance"] -= bet
-            mines_positions = random.sample(range(30), bombs)
-            ud["mines_game"] = {"bet": bet, "mines_count": bombs, "mines": mines_positions, "opened": [], "current_kf": 1.0, "payout": bet, "status": "playing"}
-            ud["state"] = None; ud["temp_bet"] = None
-            save_db()
-            st_msg = bot.send_message(msg.chat.id, "🔄 Yuklanmoqda...")
-            show_mines_board(st_msg, ud)
+            
+            kb = types.InlineKeyboardMarkup(row_width=3)
+            kb.add(*[types.InlineKeyboardButton(f"💣 {b}", callback_data=f"m_bomb_{b}") for b in [1, 2, 3, 4, 7, 10, 15, 20, 24]])
+            bot.reply_to(msg, "💣 O'yinda nechta bomba bo'lsin? Tanlang:", reply_markup=kb)
         except: ud["state"] = None; save_db()
         return
 
@@ -280,6 +321,5 @@ if __name__ == '__main__':
     load_db()
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     Thread(target=keep_alive, daemon=True).start()
-    # 🚀 `skip_pending=True` konfliktsiz, silliq ishlashini ta'minlaydi
     bot.infinity_polling(skip_pending=True)
-    
+        
