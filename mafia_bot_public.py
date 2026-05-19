@@ -2,13 +2,14 @@ import os, sys, json, random, asyncio
 from flask import Flask
 from threading import Thread
 
+# Renderda kutubxonalar muammosiz o'rnatilishini ta'minlash
 try:
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 except ImportError:
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==21.1.1", "flask==3.0.2", "nest_asyncio==1.6.0"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-telegram-bot==20.8", "flask==3.0.2", "nest_asyncio==1.6.0"])
     import nest_asyncio
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
     from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -178,7 +179,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bet = int(update.message.text.strip())
         max_b = 900000 if uid == ADMIN_ID else 20000
         if bet < 1000 or bet > max_b:
-            await update.message.reply_text(f"❌ Garov 1000 dan {max_b} gacha bo'lsin!"); return
+            await update.message.reply_text(f"❌ Garov 1000 dan {max_b} gacha bo'lsim!"); return
     except: return
     if ud["balance"] < bet:
         await update.message.reply_text("❌ Hisobda pul kam!"); return
@@ -227,7 +228,7 @@ def main():
     load_db()
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
     
-    # Ortiqcha nizoli tarmoq sozlamalarisiz eng toza ulanish shakli
+    # Tarmoqdagi xatolarni (TypeError va NetworkError) oldini oladigan eng toza builder sozlamasi
     bot = Application.builder().token(TOKEN).build()
     
     bot.add_handler(CommandHandler("start", start))
@@ -238,9 +239,8 @@ def main():
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    print("Bot sozlamalari muvaffaqiyatli saqlandi!")
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-    
+            
