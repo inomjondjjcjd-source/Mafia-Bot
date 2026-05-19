@@ -271,10 +271,10 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # Python 3.14 dagi NetworkError xatosini 100% yo'qotuvchi maxsus xavfsiz HTTP mijoz sozlamasi
-    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", pool_timeout=60.0, connect=30.0)
+    # Pool_timeout o'rniga faqat standart xavfsiz timeout sozlamasi qoldirildi
+    clean_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=45.0)
     
-    bot = Application.builder().token(TOKEN).request(clean_client).read_timeout(60).write_timeout(60).connect_timeout(60).build()
+    bot = Application.builder().token(TOKEN).request(clean_client).read_timeout(45).write_timeout(45).connect_timeout(45).build()
     
     bot.add_handler(CommandHandler("start", start))
     bot.add_handler(CommandHandler("setav", admin_setaviator))
@@ -284,9 +284,9 @@ def main():
     bot.add_handler(CallbackQueryHandler(callback_handler))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     
-    print("Bot muvaffaqiyatli xatolarsiz yuklandi!")
+    print("Bot xatolarsiz muvaffaqiyatli yuklandi!")
     bot.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
-        
+                   
