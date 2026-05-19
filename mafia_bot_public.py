@@ -49,23 +49,37 @@ def check_user(uid, name="Foydalanuvchi"):
         if k not in u: u[k] = None
     return u
 
-# --- ASOSIY KLAVIATURA ---
 def get_main_keyboard(uid):
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
         types.InlineKeyboardButton("🍏 Apple of Fortune", callback_data="prep_apple"),
-        types.InlineKeyboardButton("🚀 Aviator (Real-Time)", callback_data="prep_aviator")
+        types.InlineKeyboardButton("🚀 Aviator (VIP)", callback_data="prep_aviator")
     )
     kb.add(
-        types.InlineKeyboardButton("💸 Pul Kiritish (Deposit)", url=f"tg://user?id={ADMIN_ID}"),
-        types.InlineKeyboardButton("💳 Pul Yechish (Cashout)", url=f"tg://user?id={ADMIN_ID}")
+        types.InlineKeyboardButton("💸 Pul Kiritish", url=f"tg://user?id={ADMIN_ID}"),
+        types.InlineKeyboardButton("💳 Pul Yechish", url=f"tg://user?id={ADMIN_ID}")
     )
     kb.add(
-        types.InlineKeyboardButton("🎫 1 ta Chipta (4k)", callback_data="b_ticket_1"),
-        types.InlineKeyboardButton("🎁 10 ta Chipta (30k)", callback_data="b_ticket_10")
+        types.InlineKeyboardButton("🎫 1 chipta (4k)", callback_data="b_ticket_1"),
+        types.InlineKeyboardButton("🎁 10 chipta (30k)", callback_data="b_ticket_10")
     )
     if uid == ADMIN_ID:
-        kb.add(types.InlineKeyboardButton("👑 Admin Panel (VIP)", callback_data="admin_dashboard"))
+        kb.add(types.InlineKeyboardButton("👑 Admin Panel", callback_data="admin_dashboard"))
+    return kb
+
+def get_admin_keyboard():
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        types.InlineKeyboardButton("📈 Aviator x2.00", callback_data="ad_setav_2"),
+        types.InlineKeyboardButton("📈 Aviator x5.00", callback_data="ad_setav_5"),
+        types.InlineKeyboardButton("📈 Aviator x10.00", callback_data="ad_setav_10"),
+        types.InlineKeyboardButton("🎲 Avtomatik", callback_data="ad_setav_rand")
+    )
+    kb.add(
+        types.InlineKeyboardButton("💰 Pul Berish", callback_data="ad_give_money"),
+        types.InlineKeyboardButton("🎫 Chipta Berish", callback_data="ad_give_ticket")
+    )
+    kb.add(types.InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="to_main"))
     return kb
 
 @bot.message_handler(commands=['start'])
@@ -73,31 +87,17 @@ def start_cmd(message):
     uid = message.from_user.id
     ud = check_user(uid, message.from_user.first_name)
     ud["state"] = None
+    ud["apple_game"] = None
+    ud["aviator_game"] = None
     save_db()
     
     txt = (
-        f"👑 *SHOX SUPREME PLATFORMA v6.8*\n\n"
+        f"👑 *SHOX SUPREME PLATFORMA v7.0*\n\n"
         f"💵 *Balans:* {ud['balance']} so'm\n"
         f"🎫 *Chiptalar:* {ud['tickets']} ta\n\n"
         f"🎁 _Chiptangiz bo'lsa, o'yinlarda 4 000 so'mlik urinish tekin beriladi!_"
     )
     bot.send_message(message.chat.id, txt, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
-
-# --- INLINE ADMIN PANEL KLAVIATURASI ---
-def get_admin_keyboard():
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("📈 Aviator X x2.00", callback_data="ad_setav_2"),
-        types.InlineKeyboardButton("📈 Aviator X x5.00", callback_data="ad_setav_5"),
-        types.InlineKeyboardButton("📈 Aviator X x10.00", callback_data="ad_setav_10"),
-        types.InlineKeyboardButton("🎲 Tasodifiy (Auto)", callback_data="ad_setav_rand")
-    )
-    kb.add(
-        types.InlineKeyboardButton("💰 Foydalanuvchiga Pul", callback_data="ad_give_money"),
-        types.InlineKeyboardButton("🎫 Chipta Sovg'a qilish", callback_data="ad_give_ticket")
-    )
-    kb.add(types.InlineKeyboardButton("⬅️ Bosh Menyu", callback_data="to_main"))
-    return kb
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
@@ -106,9 +106,11 @@ def callback_handler(call):
     
     if call.data == "to_main":
         ud["state"] = None
+        ud["apple_game"] = None
+        ud["aviator_game"] = None
         save_db()
         txt = (
-            f"👑 *SHOX SUPREME PLATFORMA v6.8*\n\n"
+            f"👑 *SHOX SUPREME PLATFORMA v7.0*\n\n"
             f"💵 *Balans:* {ud['balance']} so'm\n"
             f"🎫 *Chiptalar:* {ud['tickets']} ta\n\n"
             f"🎁 _Chiptangiz bo'lsa, o'yinlarda 4 000 so'mlik urinish tekin beriladi!_"
@@ -116,44 +118,34 @@ def callback_handler(call):
         try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
         except: pass
 
-    # --- ADMIN FAOLIYATI ---
+    # --- ADMIN TIZIMI ---
     elif call.data == "admin_dashboard" and uid == ADMIN_ID:
         total_users = len(DB["users"])
         total_balance = sum([u.get("balance", 0) for u in DB["users"].values()])
-        next_av = DB["settings"].get("next_aviator", "Belgilanmagan (Auto)")
-        
+        next_av = DB["settings"].get("next_aviator", "Auto")
         txt = (
-            f"👑 *SUPREME PROFESSIONAL ADMIN PANEL*\n\n"
-            f"👥 *Umumiy foydalanuvchilar:* {total_users} ta\n"
-            f"💰 *Jami foydalanuvchilar balansi:* {total_balance} so'm\n"
-            f"🚀 *Keyingi qotirilgan Aviator:* `x{next_av}`\n\n"
-            f"👇 Quyidagi tugmalar orqali botni to'liq boshqaring:"
+            f"👑 *ADMIN PANEL*\n\n"
+            f"👥 Foydalanuvchilar: {total_users} ta\n"
+            f"💰 Jami balans: {total_balance} so'm\n"
+            f"🚀 Keyingi Aviator: `x{next_av}`"
         )
         try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=get_admin_keyboard())
         except: pass
 
     elif call.data.startswith("ad_setav_") and uid == ADMIN_ID:
         mode = call.data.split("_")[2]
-        if mode == "rand":
-            DB["settings"]["next_aviator"] = None
-            bot.answer_callback_query(call.id, "Aviator tasodifiy rejimga o'tkazildi!")
-        else:
-            val = float(mode)
-            DB["settings"]["next_aviator"] = val
-            bot.answer_callback_query(call.id, f"Keyingi parvoz x{val} ga qotirildi!")
+        DB["settings"]["next_aviator"] = None if mode == "rand" else float(mode)
         save_db()
-        # Admin panelni yangilash
+        bot.answer_callback_query(call.id, f"Sozlama saqlandi!")
         callback_handler(call)
 
     elif call.data in ["ad_give_money", "ad_give_ticket"] and uid == ADMIN_ID:
         ud["state"] = f"admin_expect_id_{call.data.split('_')[2]}"
         save_db()
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("⬅️ Ortga", callback_data="admin_dashboard"))
-        try: bot.edit_message_text("👤 Pul yoki Chipta berish uchun foydalanuvchining *ID raqamini* yozib yuboring:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        try: bot.edit_message_text("👤 Foydalanuvchi *ID raqamini* yozib yuboring:", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
         except: pass
 
-    # --- CHIPTA SOTIB OLISH ---
+    # --- CHIPTA XARIDI ---
     elif call.data in ["b_ticket_1", "b_ticket_10"]:
         cost, tix = (4000, 1) if call.data == "b_ticket_1" else (30000, 10)
         if ud["balance"] < cost:
@@ -162,16 +154,15 @@ def callback_handler(call):
         ud["balance"] -= cost
         ud["tickets"] += tix
         save_db()
-        bot.answer_callback_query(call.id, f"Sotib olindi! +{tix} chipta")
+        bot.answer_callback_query(call.id, f"Sotib olindi! +{tix}")
         callback_handler(call)
 
-    # --- APPLE OF FORTUNE ---
+    # --- APPLE OF FORTUNE BOSHLACH ---
     elif call.data == "prep_apple":
+        if ud["apple_game"] or ud["aviator_game"]: return
         if ud["tickets"] > 0:
             ud["tickets"] -= 1
             save_db()
-            try: bot.edit_message_text("🎫 *1 ta chiptadan foydalanildi! 4 000 so'mlik tekin o'yin boshlandi!*", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
-            except: pass
             start_apple_game(call.message, ud, 4000, uid, is_ticket=True)
         else:
             ud["state"] = "input_apple_bet"
@@ -179,45 +170,26 @@ def callback_handler(call):
             kb = types.InlineKeyboardMarkup()
             kb.row(types.InlineKeyboardButton("💵 2 000", callback_data="q_ap_2000"), types.InlineKeyboardButton("💵 5 000", callback_data="q_ap_5000"), types.InlineKeyboardButton("💵 10 000", callback_data="q_ap_10000"))
             kb.add(types.InlineKeyboardButton("⬅️ Ortga", callback_data="to_main"))
-            try: bot.edit_message_text(f"🍏 *APPLE OF FORTUNE*\n\nBalans: *{ud['balance']}* so'm\nSummani tanlang yoki yozing (Maks 10k):", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+            try: bot.edit_message_text(f"🍏 *APPLE OF FORTUNE*\n\nBalans: *{ud['balance']}* so'm\nSummani tanlang yoki yozing:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
             except: pass
 
     elif call.data.startswith("q_ap_"):
+        if ud["apple_game"]: return
         bet = int(call.data.split("_")[2])
+        if ud["balance"] < bet: return
         start_apple_game(call.message, ud, bet, uid)
 
-    # --- AVIATOR PARVOZ ---
-    elif call.data == "prep_aviator":
-        if ud["tickets"] > 0:
-            ud["tickets"] -= 1
-            save_db()
-            try: bot.edit_message_text("🎫 *1 ta chiptadan foydalanildi! 4 000 so'mlik tekin parvoz boshlandi!*", call.message.chat.id, call.message.message_id, parse_mode="Markdown")
-            except: pass
-            start_aviator_game(call.message, ud, 4000, uid, is_ticket=True)
-        else:
-            ud["state"] = "input_aviator_bet"
-            save_db()
-            h_str = " ".join([f"`[x{x}]`" for x in DB["settings"].get("aviator_history", [2.34, 1.55, 4.12, 1.22, 3.05])[-5:]])
-            kb = types.InlineKeyboardMarkup()
-            kb.row(types.InlineKeyboardButton("💵 2 000", callback_data="q_av_2000"), types.InlineKeyboardButton("💵 5 000", callback_data="q_av_5000"), types.InlineKeyboardButton("💵 10 000", callback_data="q_av_10000"))
-            kb.add(types.InlineKeyboardButton("⬅️ Ortga", callback_data="to_main"))
-            try: bot.edit_message_text(f"✈️ *AVIATOR*\n\nTarix: {h_str}\nBalans: *{ud['balance']}* so'm\nSummani tanlang yoki yozing (Maks 10k):", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
-            except: pass
-
-    elif call.data.startswith("q_av_"):
-        bet = int(call.data.split("_")[2])
-        start_aviator_game(call.message, ud, bet, uid)
-
+    # --- APPLE SELECTION ---
     elif call.data.startswith("ap_select_"):
-        idx = int(call.data.split("_")[2])
         ag = ud.get("apple_game")
         if not ag: return
+        idx = int(call.data.split("_")[2])
         if ag["grid"][ag["current_row"]][idx] == "bad":
             ud["apple_game"] = None
             save_db()
             kb = types.InlineKeyboardMarkup()
             kb.add(types.InlineKeyboardButton("🍏 Qayta o'ynash", callback_data="prep_apple"))
-            try: bot.edit_message_text("💀 *Chirigan olma! O'yin tugadi.*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+            try: bot.edit_message_text("💀 *Chirigan olma! Mag'lubiyat.*", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
             except: pass
             return
         ag["payout"] = int(ag["bet"] * APPLE_COEFFS[ag["current_row"]])
@@ -238,23 +210,54 @@ def callback_handler(call):
         ud["balance"] += ud["apple_game"]["payout"]
         ud["apple_game"] = None
         save_db()
-        bot.answer_callback_query(call.id, "Mavjud yutuq balansingizga qo'shildi!")
         callback_handler(call)
 
-    elif call.data == "av_realtime_cashout":
+    # --- AVIATOR BOSHLACH ---
+    elif call.data == "prep_aviator":
+        if ud["apple_game"] or ud["aviator_game"]: return
+        if ud["tickets"] > 0:
+            ud["tickets"] -= 1
+            save_db()
+            start_aviator_game(call.message, ud, 4000, uid, is_ticket=True)
+        else:
+            ud["state"] = "input_aviator_bet"
+            save_db()
+            kb = types.InlineKeyboardMarkup()
+            kb.row(types.InlineKeyboardButton("💵 2 000", callback_data="q_av_2000"), types.InlineKeyboardButton("💵 5 000", callback_data="q_av_5000"), types.InlineKeyboardButton("💵 10 000", callback_data="q_av_10000"))
+            kb.add(types.InlineKeyboardButton("⬅️ Ortga", callback_data="to_main"))
+            try: bot.edit_message_text(f"🚀 *AVIATOR (STABIL REJIM)*\n\nBalans: *{ud['balance']}* so'm\nTikish summasini tanlang:", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+            except: pass
+
+    elif call.data.startswith("q_av_"):
+        if ud["aviator_game"]: return
+        bet = int(call.data.split("_")[2])
+        if ud["balance"] < bet: return
+        start_aviator_game(call.message, ud, bet, uid)
+
+    # --- AVIATOR NATIJALARI ---
+    elif call.data.startswith("av_choice_"):
         ag = ud.get("aviator_game")
-        if not ag or ag["status"] != "flying": return
-        ag["status"] = "cashout"
-        win = int(ag["bet"] * ag["current_win"])
-        ud["balance"] += win
+        if not ag: return
+        choice = float(call.data.split("_")[2])
+        
+        # Balans tekshiruvi va yutuq mantiqi
+        if choice <= ag["crash"]:
+            win = int(ag["bet"] * choice)
+            ud["balance"] += win
+            txt = f"💰 *Muvaffaqiyatli Cashout!*\n📈 Samolyot `x{ag['crash']}` gacha uchdi.\n💰 Siz `x{choice}` da yechdingiz va *+{win} so'm* yutdingiz!"
+        else:
+            txt = f"💥 *BOOM! Samolyot x{ag['crash']} da portladi!*\n❌ Siz `x{choice}` gacha kutib yubordingiz va stavkani yo'qotdingiz."
+        
+        DB["settings"]["aviator_history"].append(ag["crash"])
         ud["aviator_game"] = None
         save_db()
+        
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("✈️ Qayta uchish", callback_data="prep_aviator"))
-        try: bot.edit_message_text(f"💰 *CASHOUT DONE!*\n📈 Koeffitsiyent: *x{ag['current_win']}*\n💰 +{win} so'm!", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        kb.add(types.InlineKeyboardButton("🚀 Qayta Parvoz", callback_data="prep_aviator"))
+        try: bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=kb)
         except: pass
 
-# --- BILIMLAR/MANTIQ ---
+# --- O'YINLARNING TOZA MANTIQLARI ---
 def start_apple_game(message_obj, ud, bet, uid, is_ticket=False):
     if not is_ticket: ud["balance"] -= bet
     grid = []
@@ -268,73 +271,53 @@ def start_apple_game(message_obj, ud, bet, uid, is_ticket=False):
     save_db()
     show_apple(message_obj, ud, (uid == ADMIN_ID))
 
-def show_apple(message_obj, ud, is_admin_cheat):
+def show_apple(message_obj, ud, is_admin):
     ag = ud["apple_game"]
     crow = ag["current_row"]
     kb = types.InlineKeyboardMarkup(row_width=6)
     for ri in range(12, -1, -1):
         row_btns = [types.InlineKeyboardButton(f"x{APPLE_COEFFS[ri]}", callback_data="lock")]
         for ci in range(5):
-            if ri < crow: 
-                row_btns.append(types.InlineKeyboardButton("🍏", callback_data="lock"))
-            elif ri == crow: 
-                lbl = "🍏" if (is_admin_cheat and ag["grid"][ri][ci] == "good") else "🍎" if (is_admin_cheat and ag["grid"][ri][ci] == "bad") else "🟫"
+            if ri < crow: row_btns.append(types.InlineKeyboardButton("🍏", callback_data="lock"))
+            elif ri == crow:
+                lbl = "🍏" if (is_admin and ag["grid"][ri][ci] == "good") else "🍎" if (is_admin and ag["grid"][ri][ci] == "bad") else "🟫"
                 row_btns.append(types.InlineKeyboardButton(lbl, callback_data=f"ap_select_{ci}"))
-            else: 
-                row_btns.append(types.InlineKeyboardButton("🔒", callback_data="lock"))
+            else: row_btns.append(types.InlineKeyboardButton("🔒", callback_data="lock"))
         kb.row(*row_btns)
-    if crow > 0: kb.add(types.InlineKeyboardButton(f"💰 Olmalarni olish ({ag['payout']})", callback_data="ap_cashout"))
+    if crow > 0: kb.add(types.InlineKeyboardButton(f"💰 Naqdlashtirish ({ag['payout']})", callback_data="ap_cashout"))
     kb.add(types.InlineKeyboardButton("⬅️ Chiqish", callback_data="to_main"))
-    try: bot.edit_message_text(f"🍏 *APPLE OF FORTUNE*\n\n💰 Yutuq: *{ag['payout']}* so'm", message_obj.chat.id, message_obj.message_id, parse_mode="Markdown", reply_markup=kb)
+    try: bot.edit_message_text(f"🍏 *APPLE OF FORTUNE*\n\nMavjud yutuq: *{ag['payout']}* so'm", message_obj.chat.id, message_obj.message_id, parse_mode="Markdown", reply_markup=kb)
     except: pass
 
 def start_aviator_game(message_obj, ud, bet, uid, is_ticket=False):
     if not is_ticket: ud["balance"] -= bet
-    crash = DB["settings"].get("next_aviator") if DB["settings"].get("next_aviator") else round(random.uniform(1.1, 5.0), 2)
+    crash = DB["settings"].get("next_aviator") if DB["settings"].get("next_aviator") else round(random.uniform(1.15, 6.0), 2)
     DB["settings"]["next_aviator"] = None
-    ud["aviator_game"] = {"current_win": 1.0, "crash": crash, "bet": bet, "status": "flying"}
+    ud["aviator_game"] = {"crash": crash, "bet": bet}
     ud["state"] = None
     save_db()
-    Thread(target=run_realtime_aviator, args=(message_obj.chat.id, message_obj.message_id, uid), daemon=True).start()
+    
+    # Faqat admin uchun signal ko'rinishi
+    cheat = f" 🕵️‍♂️ `[PORTLASH: x{crash}]`" if uid == ADMIN_ID else ""
+    
+    kb = types.InlineKeyboardMarkup(row_width=3)
+    kb.row(types.InlineKeyboardButton("🎯 Cashout x1.20", callback_data="av_choice_1.20"), types.InlineKeyboardButton("🎯 Cashout x1.50", callback_data="av_choice_1.50"))
+    kb.row(types.InlineKeyboardButton("🎯 Cashout x2.00", callback_data="av_choice_2.00"), types.InlineKeyboardButton("🎯 Cashout x3.00", callback_data="av_choice_3.00"))
+    kb.row(types.InlineKeyboardButton("🎯 Cashout x4.00", callback_data="av_choice_4.00"), types.InlineKeyboardButton("🎯 Cashout x5.00", callback_data="av_choice_5.00"))
+    kb.add(types.InlineKeyboardButton("⬅️ Tavakkal qilish / Chiqish", callback_data="to_main"))
+    
+    h_str = " ".join([f"`[x{x}]`" for x in DB["settings"]["aviator_history"][-4:]])
+    try: bot.edit_message_text(f"🚀 *AVIATOR FLIGHT*{cheat}\n\nTarix: {h_str}\n💰 Tikilgan summa: *{bet}* so'm\n\nSamolyot havoda! Qaysi koeffitsiyentda pulni yechmoqchisiz? Tanlang:", message_obj.chat.id, message_obj.message_id, parse_mode="Markdown", reply_markup=kb)
+    except: pass
 
-def run_realtime_aviator(chat_id, message_id, uid):
-    import time
-    while True:
-        time.sleep(0.85)
-        ud = DB["users"].get(uid)
-        if not ud or not ud.get("aviator_game") or ud["aviator_game"]["status"] != "flying": break
-        ag = ud["aviator_game"]
-        ag["current_win"] = round(ag["current_win"] + random.uniform(0.15, 0.35), 2)
-        
-        if ag["current_win"] >= ag["crash"]:
-            cp = ag["crash"]
-            ud["aviator_game"] = None
-            DB["settings"]["aviator_history"].append(cp)
-            save_db()
-            kb = types.InlineKeyboardMarkup()
-            kb.add(types.InlineKeyboardButton("✈️ Qayta", callback_data="prep_aviator"))
-            try: bot.edit_message_text(f"💥 *BOOM! x{cp} da portladi!*", chat_id, message_id, parse_mode="Markdown", reply_markup=kb)
-            except: pass
-            break
-        save_db()
-        current_payout = int(ag["bet"] * ag["current_win"])
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton(f"🛑 CASHOUT ({current_payout})", callback_data="av_realtime_cashout"))
-        
-        # --- SENDAN BO'LSA PORTLASH SIGNALINI TEKSHIRIB KO'RSATADI ---
-        cheat_indicator = f" 🕵️‍♂️ `[PORTLASH: x{ag['crash']}]`" if uid == ADMIN_ID else ""
-        
-        try: bot.edit_message_text(f"✈️ *AVIATOR*{cheat_indicator}\n\n📈 Koeffitsiyent: *x{ag['current_win']}* 🔥\n💰 Naqd yutuq: {current_payout} so'm", chat_id, message_id, parse_mode="Markdown", reply_markup=kb)
-        except: pass
-
-# --- MATNLI JAVOBLAR / ADMIN INTEGRATSIYASI ---
 @bot.message_handler(func=lambda msg: True)
 def text_handler(msg):
     uid = msg.from_user.id
     ud = check_user(uid)
+    if not ud["state"]: return
     
-    # Admin input id bosqichi
-    if ud["state"] and ud["state"].startswith("admin_expect_id_"):
+    # Admin ma'lumot kiritishlar
+    if ud["state"].startswith("admin_expect_id_"):
         mode = ud["state"].split("_")[3]
         try:
             target_id = int(msg.text.strip())
@@ -342,41 +325,33 @@ def text_handler(msg):
                 ud["target_user"] = target_id
                 ud["state"] = f"admin_expect_val_{mode}"
                 save_db()
-                bot.reply_to(msg, f"Qiymatni kiriting (Masalan, qancha pul yoki chipta bermoqchisiz):")
-            else:
-                bot.reply_to(msg, "❌ Bunday foydalanuvchi ID topilmadi!")
-                ud["state"] = None; save_db()
-        except: pass
+                bot.reply_to(msg, "Qiymatni (son) kiriting:")
+            else: bot.reply_to(msg, "❌ ID topilmadi.")
+        except: ud["state"] = None; save_db()
         return
 
-    # Admin input qiymat bosqichi
-    if ud["state"] and ud["state"].startswith("admin_expect_val_"):
+    if ud["state"].startswith("admin_expect_val_"):
         mode = ud["state"].split("_")[3]
         try:
             val = int(msg.text.strip())
             t_id = ud["target_user"]
-            if mode == "money":
-                DB["users"][t_id]["balance"] += val
-                bot.send_message(t_id, f"💰 Admin sizga *{val} so'm* pul o'tkazdi!", parse_mode="Markdown")
-            elif mode == "ticket":
-                DB["users"][t_id]["tickets"] += val
-                bot.send_message(t_id, f"🎫 Admin sizga *{val} ta chipta* sovg'a qildi!", parse_mode="Markdown")
+            if mode == "money": DB["users"][t_id]["balance"] += val
+            elif mode == "ticket": DB["users"][t_id]["tickets"] += val
             save_db()
-            bot.reply_to(msg, "✅ Muvaffaqiyatli bajarildi!")
+            bot.reply_to(msg, "✅ Bajarildi!")
         except: pass
         ud["state"] = None; ud["target_user"] = None; save_db()
         return
 
-    # O'yin stavkalari kiritish
-    if not ud["state"]: return
+    # Qo'lda summa yozish
     try:
         bet = int(msg.text.strip())
         if bet < 1000 or bet > 10000 or ud["balance"] < bet: return
     except: return
     
-    start_msg = bot.send_message(msg.chat.id, "🔄 Boshlanmoqda...")
-    if ud["state"] == "input_apple_bet": start_apple_game(start_msg, ud, bet, uid)
-    elif ud["state"] == "input_aviator_bet": start_aviator_game(start_msg, ud, bet, uid)
+    st_msg = bot.send_message(msg.chat.id, "🔄...")
+    if ud["state"] == "input_apple_bet": start_apple_game(st_msg, ud, bet, uid)
+    elif ud["state"] == "input_aviator_bet": start_aviator_game(st_msg, ud, bet, uid)
 
 app = Flask(__name__)
 @app.route('/')
@@ -389,4 +364,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
+    
