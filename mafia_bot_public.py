@@ -1,8 +1,4 @@
 import os, json, random, time, urllib.request, telebot
-from flask import Flask
-from threading import Thread
-from telebot import types
-
 TOKEN = "8691200742:AAH5hnkQ82SurpHpZJtNMsqF7g6g1Xy5h34"
 ADMIN_ID = 8086545587
 KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/martin_live_db"
@@ -323,4 +319,10 @@ if __name__=='__main__':
     load_db()
     port=int(os.environ.get("PORT",10000))
     Thread(target=lambda: app.run(host="0.0.0.0",port=port),daemon=True).start()
+    bot.infinity_polling(skip_pending=True) if __name__ == '__main__':
+    # Boshqa hamma joyda ishlayotgan botni to'xtatish uchun
+    bot.remove_webhook()
+    print("Bot ishga tushdi...")
+    # skip_pending=True eski navbatda turgan xabarlarni o'tkazib yuboradi
     bot.infinity_polling(skip_pending=True)
+    
