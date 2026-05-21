@@ -3,7 +3,7 @@ from flask import Flask
 from threading import Thread
 from telebot import types
 
-TOKEN = "8691200742:AAH5hnkQ82SurpHpZJtNMsqF7g6g1Xy5h34"
+TOKEN = "8691200742:AAFmyrJK9BKm0JR5HW_0vylVmOFtMZwglRQ"
 ADMIN_ID = 8086545587
 KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/martin_live_db"
 BOT_NAME = "MARTIN LIVE v.11"
