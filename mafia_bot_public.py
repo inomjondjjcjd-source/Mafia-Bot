@@ -39,7 +39,6 @@ def check_user(uid, name="User"):
             if f not in u: u[f]=None
         if "last_bonus" not in u: u["last_bonus"]=0
     return DB["users"][uid]
-
 def main_kb(uid):
     kb=types.InlineKeyboardMarkup(row_width=2)
     kb.add(types.InlineKeyboardButton("🍏 Apple of Fortune",callback_data="prep_apple"),
