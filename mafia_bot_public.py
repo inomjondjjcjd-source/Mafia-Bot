@@ -3,7 +3,7 @@ from flask import Flask
 from threading import Thread
 from telebot import types
 
-TOKEN = "8691200742:AAGX4RR1ThorK3FUuVzdeNPrqHxRTIli8c8"
+TOKEN = "8691200742:AAEv-8-wixOxzlHmIU-jbMy4QHYOE1-M6QM"
 ADMIN_ID = 8086545587
 KVDB_URL = "https://kvdb.io/MN86yM86yM86yM86yM86yM/shox_sup_v10_db"
 
@@ -267,3 +267,4 @@ if __name__ == '__main__':
     load_db(); port = int(os.environ.get("PORT", 10000))
     Thread(target=lambda: app.run(host="0.0.0.0", port=port), daemon=True).start()
     bot.infinity_polling(skip_pending=True)
+                                               
