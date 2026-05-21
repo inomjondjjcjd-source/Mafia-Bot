@@ -50,7 +50,7 @@ def start_cmd(message):
     uid = message.from_user.id
     ud = check_user(uid, message.from_user.first_name)
     ud["state"] = None; save_db()
-    txt = f"👑 *SHOX SUPREME PLATFORMA v10.0*\n\n💵 *Balans:* {ud['balance']} so'm\nStatus: 🟢 Live (Uyg'oq)"
+    txt = f"👑 *inomjon uzbekistan bot v10.0*\n\n💵 *Balans:* {ud['balance']} so'm\nStatus: 🟢 Live (Uyg'oq)"
     bot.send_message(message.chat.id, txt, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
 
 @bot.message_handler(func=lambda m: check_user(m.from_user.id).get("state") is not None)
