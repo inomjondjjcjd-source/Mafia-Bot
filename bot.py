@@ -48,7 +48,7 @@ if __name__ == '__main__':
     t = Thread(target=run)
     t.start()
     
-    TOKEN = "7224154869:AAESKaJhYAPiu-tFFSS6pFYrsCmmMvWlbQ8"
+    TOKEN = "8850891918:AAEXajgiKjFGRq-ZZeXO--Sm8Ck-_LCdZdM"
     application = ApplicationBuilder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
