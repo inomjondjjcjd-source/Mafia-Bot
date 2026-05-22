@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 logging.basicConfig(level=logging.INFO)
 
-# Baza sozlamasi
+# Baza yaratish
 def init_db():
     conn = sqlite3.connect('bot_data.db')
     cursor = conn.cursor()
@@ -16,6 +16,7 @@ def init_db():
 
 init_db()
 
+# Baza funksiyalari
 def get_or_create_user(user_id):
     conn = sqlite3.connect('bot_data.db')
     cursor = conn.cursor()
@@ -38,7 +39,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
     
-    # Referal tizimi
     if args and args[0].startswith('ref_'):
         inviter_id = int(args[0].split('_')[1])
         if inviter_id != user_id:
@@ -56,30 +56,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("Xush kelibsiz! Asosiy menyu:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
-# Profil ko'rsatish
+# Profil va Referal
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     balance, refs = get_or_create_user(user_id)
-    
-    # Inline tugmalar
-    keyboard = [
-        [InlineKeyboardButton("🔗 Referal havola olish", callback_data='get_ref')],
-        [InlineKeyboardButton("👥 Do'st taklif qilish", switch_inline_query="Do'stlaringizni taklif qiling!")]
-    ]
     
     text = (f"👤 Foydalanuvchi: {update.effective_user.first_name}\n"
             f"💰 Balans: {balance} coin\n"
             f"👥 Referallar: {refs} ta")
     
+    # Inline tugmalar
+    keyboard = [
+        [InlineKeyboardButton("🔗 Referal havola olish", callback_data='get_ref')],
+        [InlineKeyboardButton("📤 Do'st taklif qilish", switch_inline_query="Gresscoin botiga qo'shiling!")]
+    ]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.data == 'get_ref':
-        bot_username = context.bot.username
-        ref_link = f"https://t.me/{bot_username}?start=ref_{update.effective_user.id}"
+        ref_link = f"https://t.me/{context.bot.username}?start=ref_{update.effective_user.id}"
+        # Xabarni yuborish, foydalanuvchi ustiga bosib kopiya qiladi
+        await query.message.reply_text(f"Sizning referal havolangiz:\n\n`{ref_link}`", parse_mode='Markdown')
         await query.answer()
-        await query.message.reply_text(f"Sizning shaxsiy referal havolangiz:\n{ref_link}")
 
 if __name__ == '__main__':
     TOKEN = "8850891918:AAEXajgiKjFGRq-ZZeXO--Sm8Ck-_LCdZdM"
@@ -88,4 +87,4 @@ if __name__ == '__main__':
     application.add_handler(MessageHandler(filters.Text("👤 Profil"), profile))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.run_polling()
-    
+        
