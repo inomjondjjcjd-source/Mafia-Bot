@@ -1,80 +1,74 @@
 import logging
-import os
-from flask import Flask
-from threading import Thread
+import sqlite3
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
 # Loglarni sozlash
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
-app = Flask(__name__)
+# Ma'lumotlar bazasini sozlash
+def init_db():
+    conn = sqlite3.connect('bot_data.db')
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users 
+                      (user_id INTEGER PRIMARY KEY, balance INTEGER, refs INTEGER, inviter_id INTEGER)''')
+    conn.commit()
+    conn.close()
 
-@app.route('/')
-def home():
-    return "Gresscoin Bot Profil ishlamoqda!"
+init_db()
 
-def run():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+# Baza bilan ishlash funksiyalari
+def update_user(user_id, balance=None, refs=None, inviter_id=None):
+    conn = sqlite3.connect('bot_data.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO users (user_id, balance, refs, inviter_id) VALUES (?, 0, 0, ?)", (user_id, inviter_id))
+    if balance is not None: cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (balance, user_id))
+    if refs is not None: cursor.execute("UPDATE users SET refs = refs + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
 
-# Asosiy menyu
-def get_main_menu():
-    keyboard = [
-        [KeyboardButton("👤 Profil"), KeyboardButton("⚔️ Ligalar")],
-        [KeyboardButton("🔑 Vazifalar"), KeyboardButton("🎁 Bonus")],
-        [KeyboardButton("🎮 O'yinlar"), KeyboardButton("🧩 Testlar")]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+def get_user(user_id):
+    conn = sqlite3.connect('bot_data.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT balance, refs FROM users WHERE user_id = ?", (user_id,))
+    data = cursor.fetchone()
+    conn.close()
+    return data or (0, 0)
 
-# Profil menyusi
-def get_profile_inline_menu():
-    keyboard = [
-        [InlineKeyboardButton("🔗 Referal havolani olish", callback_data='get_ref')],
-        [InlineKeyboardButton("👥 Referallarni ko'rish", callback_data='see_refs')],
-        [InlineKeyboardButton("🔏 Xavfsizlik", callback_data='security'), InlineKeyboardButton("📊 Statistika", callback_data='stats')]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# /start komandasi
+# Start komandasi
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Xush kelibsiz! Quyidagi menyudan birini tanlang:",
-        reply_markup=get_main_menu()
-    )
-
-# Profil xabarini yuborish
-async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    profile_text = (
-        f"👤 Foydalanuvchi: {user.mention_html()}\n"
-        f"▪ Gresscoin: 0 ta\n"
-        f"👥 Referal: 0 ta\n"
-        f"🏆 Liga: Boshlang'ich (Keyingi liga: Bilimdon)\n"
-        f"📈 Liga bo'yicha reyting: N/A\n"
-        f"🇺🇿 O'zbekiston bo'yicha reyting: N/A"
-    )
-    if update.message:
-        await update.message.reply_html(profile_text, reply_markup=get_profile_inline_menu())
-
-# Xabarlarni boshqarish
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    if text == "👤 Profil":
-        await show_profile(update, context)
+    user_id = update.effective_user.id
+    args = context.args
+    
+    # Referal orqali kirish
+    if args and args[0].startswith('ref_'):
+        inviter_id = int(args[0].split('_')[1])
+        if inviter_id != user_id:
+            update_user(user_id, inviter_id=inviter_id)
+            update_user(inviter_id, balance=5000, refs=1)
+            await context.bot.send_message(inviter_id, "Tabriklaymiz! 1 ta yangi referal qo'shildi. Hisobingizga 5000 coin qo'shildi.")
     else:
-        await update.message.reply_text(f"Siz tanladingiz: {text}. Tez orada funksiyalar ishga tushadi!")
+        update_user(user_id)
+
+    await update.message.reply_text("Xush kelibsiz! Asosiy menyu:", reply_markup=ReplyKeyboardMarkup([["👤 Profil"]], resize_keyboard=True))
+
+# Profil ko'rsatish
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    balance, refs = get_user(user_id)
+    ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
+    
+    text = (f"👤 Foydalanuvchi: {update.effective_user.first_name}\n"
+            f"💰 Balans: {balance} coin\n"
+            f"👥 Referallar: {refs} ta\n\n"
+            f"🔗 Sizning havolangiz: {ref_link}")
+    
+    await update.message.reply_text(text)
 
 if __name__ == '__main__':
-    t = Thread(target=run)
-    t.start()
-    
-    # YANGI TOKEN
     TOKEN = "8850891918:AAEXajgiKjFGRq-ZZeXO--Sm8Ck-_LCdZdM"
-    
     application = ApplicationBuilder().token(TOKEN).build()
-    
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
+    application.add_handler(MessageHandler(filters.Text("👤 Profil"), profile))
     application.run_polling()
     
