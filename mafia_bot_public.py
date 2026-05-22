@@ -30,7 +30,7 @@ except: pass
 
 def check_user(uid, name="Foydalanuvchi"):
 if uid not in DB["users"]:
-DB["users"][uid] = {"name": name, "balance": 22000, "last_bonus": 0, "apple_game": None, "aviator_game": None, "mines_game": None, "state": None, "temp_bet": None}
+DB["users"][uid] = {"name": name, "balance": 10000, "last_bonus": 0, "apple_game": None, "aviator_game": None, "mines_game": None, "state": None, "temp_bet": None}
 save_db()
 u = DB["users"][uid]
 for f in ["apple_game", "aviator_game", "mines_game", "state", "temp_bet"]:
@@ -50,7 +50,7 @@ def start_cmd(message):
 uid = message.from_user.id
 ud = check_user(uid, message.from_user.first_name)
 ud["state"] = None; save_db()
-txt = f"👑 Martin kazino live v10.0\n\n💵 Balans: {ud['balance']} so'm\nStatus: 🟢 Live (Uyg'oq)"
+txt = f"👑 Martin kazino live v11.0\n\n💵 Balans: {ud['balance']} so'm\nStatus: 🟢 Live (Uyg'oq)"
 bot.send_message(message.chat.id, txt, parse_mode="Markdown", reply_markup=get_main_keyboard(uid))
 
 @bot.message_handler(func=lambda m: check_user(m.from_user.id).get("state") is not None)
