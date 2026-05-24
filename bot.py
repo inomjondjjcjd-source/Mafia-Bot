@@ -1,11 +1,11 @@
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
 TOKEN = "8849139822:AAGMl30M3Xm-IOxiWE6n8BS8NVOQyfhACGw"
 ADMIN_ID = 5829527078 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Pastki menyu tugmalari (Yangilangan)
+    # 1. Pastki (Reply) tugmalar
     reply_keyboard = [
         ["📦 Katalog", "🛒 Savat"],
         ["🚚 Yetkazib berish", "ℹ️ Biz haqimizda"],
@@ -13,39 +13,53 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
+    # 2. Inline tugmalar (xabardan keyin chiqadigan)
+    inline_keyboard = [
+        [InlineKeyboardButton("🔍 Tovarlarni ko'rish", callback_data='catalog')],
+        [InlineKeyboardButton("💬 Admin bilan bog'lanish", url=f"tg://user?id={ADMIN_ID}")],
+        [InlineKeyboardButton("ℹ️ Biz haqimizda", callback_data='about')]
+    ]
+    inline_markup = InlineKeyboardMarkup(inline_keyboard)
+    
+    # Xush kelibsiz xabari
     await update.message.reply_text(
         "Assalomu alaykum! *Tulpor yemlari* savdo botiga xush kelibsiz. "
         "Quyidagi menyu orqali kerakli bo'limni tanlang:",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
+        parse_mode='Markdown', reply_markup=reply_markup
     )
+    # Inline menyuni yuborish
+    await update.message.reply_text("Yoki qo'shimcha imkoniyatlardan foydalaning:", reply_markup=inline_markup)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+async def handle_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Callback (Inline) bosilganda
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        if query.data == 'about':
+            await query.message.reply_text("Assalomu alaykum! Biz *Tulpor savdo markazi*. 5 yildan beri hizmat ko'rsatamiz. Bizning tovarlar sifati a'lo, narxi esa hamyonbop. Sizlarni do'konimizda kutib qolamiz! 🐎🌐", parse_mode='Markdown')
+        elif query.data == 'catalog':
+            await query.message.reply_text("📦 Katalog bo'limi ustida ishlamoqdamiz...")
     
-    if text == "ℹ️ Biz haqimizda":
-        # Siz so'ragan alohida va ko'rinarli xabar
-        await update.message.reply_text(
-            "━━━━━━━━━━━━━━━━━━\n"
-            "🐎 *BIZ HAQIMIZDA*\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "Assalomu alaykum! Biz *Tulpor savdo markazi*. "
-            "5 yildan beri hizmat ko'rsatamiz. \n\n"
-            "✅ Bizning tovarlar sifati a'lo\n"
-            "💰 Narxi esa hamyonbop\n\n"
-            "Sizlarni do'konimizda kutib qolamiz! 🐎🌐",
-            parse_mode='Markdown'
-        )
-    elif text == "📞 Aloqa":
-        await update.message.reply_text(f"Admin bilan bog'lanish uchun: tg://user?id={ADMIN_ID}")
-    else:
-        await update.message.reply_text("Siz tanladingiz: " + text)
+    # Matnli (Reply) tugmalar bosilganda
+    elif update.message:
+        text = update.message.text
+        if text == "ℹ️ Biz haqimizda":
+            await update.message.reply_text("Assalomu alaykum! Biz *Tulpor savdo markazi*. 5 yildan beri hizmat ko'rsatamiz. Bizning tovarlar sifati a'lo, narxi esa hamyonbop. Sizlarni do'konimizda kutib qolamiz! 🐎🌐", parse_mode='Markdown')
+        elif text == "📞 Aloqa":
+            kb = [[InlineKeyboardButton("🔗 Bog'lanish", url=f"tg://user?id={ADMIN_ID}")]]
+            await update.message.reply_text("Admin bilan bog'lanish uchun pastdagi tugmani bosing:", reply_markup=InlineKeyboardMarkup(kb))
+        elif text == "📦 Katalog":
+            await update.message.reply_text("📦 Katalog bo'limi ustida ishlamoqdamiz...")
+        elif text == "🛒 Savat":
+            await update.message.reply_text("🛒 Savatingiz bo'sh.")
+        elif text == "🚚 Yetkazib berish":
+            await update.message.reply_text("🚚 Yetkazib berish shartlari:\nBiz Toshkent shahri bo'ylab yetkazib beramiz.")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    # Barcha matnli xabarlarni qayta ishlaydigan handler
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_interaction))
+    app.add_handler(CallbackQueryHandler(handle_interaction))
     print("Bot Tulpor yemlari nomi bilan ishga tushdi...")
     app.run_polling()
     
