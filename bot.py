@@ -1,25 +1,17 @@
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = "8849139822:AAGMl30M3Xm-IOxiWE6n8BS8NVOQyfhACGw"
-ADMIN_ID = 5829527078 # Sizning shaxsiy ID
+ADMIN_ID = 5829527078 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Pastki (Reply) tugmalar
+    # Pastki menyu tugmalari (Yangilangan)
     reply_keyboard = [
         ["📦 Katalog", "🛒 Savat"],
-        ["🚚 Yetkazib berish", "📞 Aloqa"]
+        ["🚚 Yetkazib berish", "ℹ️ Biz haqimizda"],
+        ["📞 Aloqa"]
     ]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
-    
-    # Inline tugmalar
-    inline_keyboard = [
-        [InlineKeyboardButton("🔍 Tovarlarni ko'rish", callback_data='catalog')],
-        # Admin bilan bog'lanish (tg://user?id=... orqali to'g'ridan-to'g'ri lichkaga olib o'tadi)
-        [InlineKeyboardButton("💬 Admin bilan bog'lanish", url=f"tg://user?id={ADMIN_ID}")],
-        [InlineKeyboardButton("ℹ️ Biz haqimizda", callback_data='about')]
-    ]
-    inline_markup = InlineKeyboardMarkup(inline_keyboard)
     
     await update.message.reply_text(
         "Assalomu alaykum! *Tulpor yemlari* savdo botiga xush kelibsiz. "
@@ -27,26 +19,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    await update.message.reply_text("Yoki qo'shimcha imkoniyatlardan foydalaning:", reply_markup=inline_markup)
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     
-    if query.data == 'about':
-        await query.message.reply_text(
+    if text == "ℹ️ Biz haqimizda":
+        # Siz so'ragan alohida va ko'rinarli xabar
+        await update.message.reply_text(
+            "━━━━━━━━━━━━━━━━━━\n"
+            "🐎 *BIZ HAQIMIZDA*\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
             "Assalomu alaykum! Biz *Tulpor savdo markazi*. "
-            "5 yildan beri hizmat ko'rsatamiz. Bizning tovarlar sifati a'lo, narxi esa hamyonbop. "
+            "5 yildan beri hizmat ko'rsatamiz. \n\n"
+            "✅ Bizning tovarlar sifati a'lo\n"
+            "💰 Narxi esa hamyonbop\n\n"
             "Sizlarni do'konimizda kutib qolamiz! 🐎🌐",
             parse_mode='Markdown'
         )
-    elif query.data == 'catalog':
-        await query.message.reply_text("Hozircha tovarlar yuklanmoqda...")
+    elif text == "📞 Aloqa":
+        await update.message.reply_text(f"Admin bilan bog'lanish uchun: tg://user?id={ADMIN_ID}")
+    else:
+        await update.message.reply_text("Siz tanladingiz: " + text)
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    # Barcha matnli xabarlarni qayta ishlaydigan handler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     print("Bot Tulpor yemlari nomi bilan ishga tushdi...")
     app.run_polling()
     
